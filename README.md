@@ -6,3 +6,7 @@ Instalacja Twythona:
     $ sudo apt-get install pip
     $ sudo pip install twython
 
+Mongoengine:
+
+    $ sudo apt-get install python-mongoengine
+
