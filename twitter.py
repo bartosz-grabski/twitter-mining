@@ -4,7 +4,9 @@ import random
 import json
 from twython import TwythonStreamer
 import mongoengine as mongo
-
+import string
+import time
+import math
 
 class InvalidMessage(Exception): pass
 
@@ -15,7 +17,7 @@ class GeoPoint(mongo.EmbeddedDocument):
 class Tweet(mongo.Document):
     tweetid = mongo.fields.IntField(required = True)
     userid = mongo.fields.IntField(required = True)
-    text = mongo.fields.StringField(required = True, max_length = 140)
+    text = mongo.fields.StringField(required = True, max_length = 200)
     geo = GeoPoint(required = True)
 
 class User(mongo.Document):
@@ -24,6 +26,13 @@ class User(mongo.Document):
     tags = mongo.fields.ListField(mongo.fields.StringField())
 
 class Streamer(TwythonStreamer):
+    def __init__(self, *args, **kwargs):
+        TwythonStreamer.__init__(self, *args, **kwargs)
+
+        self.startTime = time.time()
+        self.lastSecondTweets = 0
+        self.downloadSpeed = 0.0
+
     def on_success(self, data):
         if 'geo' not in data:
             print('not a tweet, skipping')
@@ -31,6 +40,7 @@ class Streamer(TwythonStreamer):
             return
 
         if data['geo'] is None:
+            print('error: no geolocation')
             return
 
         geo = data['geo']['coordinates']
@@ -41,7 +51,18 @@ class Streamer(TwythonStreamer):
                              latitude = geo[0])
               ).save()
 
-        print('%d tweets in database' % len(Tweet.objects))
+        now = time.time()
+
+        if math.floor(now) > math.floor(self.startTime):
+            deltaTime = now - self.startTime
+            self.downloadSpeed = float(self.lastSecondTweets) / float(deltaTime)
+
+            self.startTime = now
+            self.lastSecondTweets = 1
+        else:
+            self.lastSecondTweets += 1
+
+        print('%d tweets in database, downloading %.4f/s' % (len(Tweet.objects), self.downloadSpeed))
 
     def on_error(self, status_code, data):
         print('ERROR: %d' % status_code)
@@ -49,17 +70,20 @@ class Streamer(TwythonStreamer):
 
         self.disconnect()
 
-keys = [ x.strip().split(',') for x in open('auth').readlines() ]
+def spawn():
+    global twitterKeys
+    twitterKey = random.choice(twitterKeys)
 
-currKey = random.choice(keys)
-print('using key:')
-print('\n'.join(currKey))
+    try:
+        stream = Streamer(*twitterKey)
+        stream.statuses.filter(locations = [ -180.0, -90.0, 180.0, 90.0 ])
+    finally:
+        pass
 
-mongo.connect('twitter')
+testedKeywords = set()
+twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
 
-try:
-    stream = Streamer(*currKey)
-    stream.statuses.filter(track = 'bieber')
-finally:
-    pass
+mongo.connect('twitter2')
+
+spawn()
 
