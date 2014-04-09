@@ -1,8 +1,9 @@
-#!/usr/bin/env python
-
 import random
 import json
+from sys import stdout
+from time import sleep
 from twython import TwythonStreamer
+import multiprocessing
 import mongoengine as mongo
 import string
 import time
@@ -26,43 +27,34 @@ class User(mongo.Document):
     tags = mongo.fields.ListField(mongo.fields.StringField())
 
 class Streamer(TwythonStreamer):
-    def __init__(self, *args, **kwargs):
+    
+    def __init__(self, tweetTimeQueue, *args, **kwargs):
         TwythonStreamer.__init__(self, *args, **kwargs)
-
-        self.startTime = time.time()
-        self.lastSecondTweets = 0
-        self.downloadSpeed = 0.0
+        self.tweetTimeQueue = tweetTimeQueue
+        self.tweetList = []
+        self.globalCounter = 0
+        self.seed = random.randint(0, 100)
 
     def on_success(self, data):
         if 'geo' not in data:
-            print('not a tweet, skipping')
-            print(json.dumps(data, indent = 4, separators = (',', ': ')))
+            #print('not a tweet, skipping')
+            #print(json.dumps(data, indent = 4, separators = (',', ': ')))
             return
 
         if data['geo'] is None:
-            print('error: no geolocation')
+            #print('error: no geolocation')
             return
 
         geo = data['geo']['coordinates']
-        Tweet(tweetid = data['id'],
+        (
+            Tweet(tweetid = data['id'],
               userid = data['user']['id'],
               text = data['text'],
               geo = GeoPoint(longitude = geo[1],
-                             latitude = geo[0])
-              ).save()
+                             latitude = geo[0]))
+        ).save()
 
-        now = time.time()
-
-        if math.floor(now) > math.floor(self.startTime):
-            deltaTime = now - self.startTime
-            self.downloadSpeed = float(self.lastSecondTweets) / float(deltaTime)
-
-            self.startTime = now
-            self.lastSecondTweets = 1
-        else:
-            self.lastSecondTweets += 1
-
-        print('%d tweets in database, downloading %.4f/s' % (len(Tweet.objects), self.downloadSpeed))
+        tweetTimeQueue.put(time.time())
 
     def on_error(self, status_code, data):
         print('ERROR: %d' % status_code)
@@ -70,20 +62,57 @@ class Streamer(TwythonStreamer):
 
         self.disconnect()
 
-def spawn():
+
+class TweetCounter:
+    def __init__(self, tweetTimeQueue):
+        self.tweetTimeQueue = tweetTimeQueue
+        self.startTime = time.time()
+        self.lastSecondTweets = 0
+        self.downloadSpeed = 0.0
+        self.tweetsBefore = len(Tweet.objects)
+
+    def count(self):
+        now = time.time()
+        tweetsNow = len(Tweet.objects)
+        if math.floor(now) > math.floor(self.startTime):
+            deltaTime = now - self.startTime
+            self.downloadSpeed = (tweetsNow - self.tweetsBefore) / deltaTime
+            self.tweetsBefore = tweetsNow
+            self.startTime = now
+
+        stdout.write('\r%d tweets in database, downloading %.4f/s' % (tweetsNow, self.downloadSpeed))
+        stdout.flush()
+
+def spawn(tweetTimeQueue, vsp):
     global twitterKeys
     twitterKey = random.choice(twitterKeys)
 
     try:
-        stream = Streamer(*twitterKey)
-        stream.statuses.filter(locations = [ -180.0, -90.0, 180.0, 90.0 ])
+        stream = Streamer(tweetTimeQueue, *twitterKey)
+        stream.statuses.filter(locations = vsp)
     finally:
         pass
 
-testedKeywords = set()
+
+def getCoordinates(hostname, port){
+    socket = socket.socket (AF_UNIX,  SOCK_STREAM, protocol=0)
+    socket.bind()
+    
+}
+
 twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
 
 mongo.connect('twitter2')
+tweetTimeQueue = multiprocessing.Queue()
 
-spawn()
+counter = TweetCounter(tweetTimeQueue)
 
+
+
+coordinates = [ -180.0, -90.0, 180.0, 90.0]
+for n in range(8):
+    process = multiprocessing.Process(target=spawn, args=([tweetTimeQueue], coordinates))
+    process.start()
+
+while(True):
+    counter.count()
