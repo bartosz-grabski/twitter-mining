@@ -31,9 +31,6 @@ class Streamer(TwythonStreamer):
     def __init__(self, tweetTimeQueue, *args, **kwargs):
         TwythonStreamer.__init__(self, *args, **kwargs)
         self.tweetTimeQueue = tweetTimeQueue
-        self.tweetList = []
-        self.globalCounter = 0
-        self.seed = random.randint(0, 100)
 
     def on_success(self, data):
         if 'geo' not in data:
@@ -92,13 +89,6 @@ def spawn(tweetTimeQueue, vsp):
         stream.statuses.filter(locations = vsp)
     finally:
         pass
-
-
-def getCoordinates(hostname, port){
-    socket = socket.socket (AF_UNIX,  SOCK_STREAM, protocol=0)
-    socket.bind()
-    
-}
 
 twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
 
