@@ -2,6 +2,7 @@
 
 from threading import Thread
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
+from data_model import Tweet
 import time
 import json
 import operator
@@ -29,12 +30,15 @@ class Master(Thread):
         pass
 
     def run(self):
+        prevTweetCount = len(Tweet.objects)
+        prevTime = time.time()
+
         while (True):
             disconnected = []
             for puppet in self.puppets:
                 try:
                     msg = puppet.socket.recv()
-                    print('recevied message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
+                    #print('recevied message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
                     puppet.downloadSpeed = msg['downloadSpeed']
                     #TODO: handle message?
                 except NoMessageAvailable:
@@ -46,6 +50,16 @@ class Master(Thread):
             for puppet in disconnected:
                 self.puppets.remove(puppet)
                 #TODO: make some other puppet take the disconnected one's area
+
+            tweetCount = len(Tweet.objects)
+            now = time.time()
+
+            print('master of %d puppets: %d tweets in databse, total download speed = %.3f/s'
+                  % (len(self.puppets), len(Tweet.objects),
+                     float(tweetCount - prevTweetCount) / (now - prevTime)))
+
+            prevTweetCount = tweetCount
+            prevTime = now
 
             time.sleep(1)
 

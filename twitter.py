@@ -2,26 +2,15 @@ from sys import stdout
 from time import sleep
 from twython import TwythonStreamer
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
+from data_model import Tweet
 
 import random
 import json
 import multiprocessing
-import mongoengine as mongo
 import string
 import time
 import math
 import traceback
-
-class Tweet(mongo.Document):
-    tweetid = mongo.fields.IntField(required = True)
-    userid = mongo.fields.IntField(required = True)
-    text = mongo.fields.StringField(required = True, max_length = 200)
-    geo = mongo.fields.ListField(mongo.fields.FloatField(), required = True)
-
-class User(mongo.Document):
-    userid = mongo.fields.IntField(required = True)
-    name = mongo.fields.StringField(required = True)
-    tags = mongo.fields.ListField(mongo.fields.StringField())
 
 
 class TweetCounter:
@@ -42,8 +31,7 @@ class TweetCounter:
         self.downloadSpeed = float(tweetsDownloaded) / deltaTime
         self.lastCheckTime = now
 
-        print('%d tweets in database, downloading %.4f/s' % (len(Tweet.objects),
-                                                             self.downloadSpeed))
+        print('downloading %.4f tweets/s' % self.downloadSpeed)
 
 class StreamerShutdown(Exception): pass
 
@@ -188,8 +176,6 @@ def spawnStreamer(tweetAddedQueue, limitNoticeQueue, vsp):
 
 
 twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
-
-mongo.connect('twitter2')
 
 client = Client('127.0.0.1', 12346)
 client.run()
