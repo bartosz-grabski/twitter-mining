@@ -1,4 +1,3 @@
-from threading import Thread
 from sys import stdout
 from time import sleep
 from twython import TwythonStreamer
@@ -11,6 +10,7 @@ import mongoengine as mongo
 import string
 import time
 import math
+import traceback
 
 class Tweet(mongo.Document):
     tweetid = mongo.fields.IntField(required = True)
@@ -26,79 +26,31 @@ class User(mongo.Document):
 
 class TweetCounter:
     def __init__(self):
-        self.startTime = time.time()
-        self.lastSecondTweets = 0
         self.downloadSpeed = 0.0
-        self.tweetsBefore = len(Tweet.objects)
+        self.lastCheckTime = time.time()
+        self.tweetAddedQueue = multiprocessing.Queue()
 
     def count(self):
         now = time.time()
-        tweetsNow = len(Tweet.objects)
-        if math.floor(now) > math.floor(self.startTime):
-            deltaTime = now - self.startTime
-            self.downloadSpeed = (tweetsNow - self.tweetsBefore) / deltaTime
-            self.tweetsBefore = tweetsNow
-            self.startTime = now
 
-        print('%d tweets in database, downloading %.4f/s' % (tweetsNow, self.downloadSpeed))
+        tweetsDownloaded = 0
+        while not self.tweetAddedQueue.empty():
+            self.tweetAddedQueue.get()
+            tweetsDownloaded += 1
 
+        deltaTime = now - self.lastCheckTime
+        self.downloadSpeed = float(tweetsDownloaded) / deltaTime
+        self.lastCheckTime = now
 
-class Client(Thread):
-    def waitForCoordinates(self):
-        print('waiting for coordinates...')
-        self.coordinates = None
-        while not self.coordinates:
-            try:
-                msg = self.socket.recv()
-                if msg['type'] == 'areaDefinition':
-                    self.coordinates = msg['area']
-                else:
-                    print('received message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
-            except NoMessageAvailable:
-                pass
-        print('got: %s' % self.coordinates)
-
-    def __init__(self, hostname, port, tweetCounter, limitNoticeQueue):
-        Thread.__init__(self)
-        self.overflow = False;
-        self.socket = JSONSocket()
-        self.socket.connect((hostname, port))
-        self.tweetCounter = tweetCounter
-        self.coordinates = None
-        self.limitNoticeQueue = limitNoticeQueue
-        self.waitForCoordinates()
-
-    def getCoordinates(self):
-        return self.coordinates
-
-    def run(self):
-        while (True):
-            # po zapytaniu servera czy zyjemy pasuje mu odpowiedziec ( i powiedziec czy mamy przepelnienei czy nie),
-            # serwer moze nam powiedziec bysmy zmienili wspolrzedne po ktorych "szukamy"
-            self.tweetCounter.count()
-            self.socket.send({
-                'type': 'statusReport',
-                'downloadSpeed': self.tweetCounter.downloadSpeed
-            })
-
-            while not self.limitNoticeQueue.empty():
-                noticeTime = self.limitNoticeQueue.get()
-                print(noticeTime - self.lastLimitNoticeTime)
-                self.lastLimitNoticeTime = noticeTime
-
-            try:
-                msg = self.socket.recv()
-                # TODO: obsluga wiadomosci od serwera
-            except NoMessageAvailable:
-                pass
-
-            time.sleep(0.5)
+        print('%d tweets in database, downloading %.4f/s' % (len(Tweet.objects),
+                                                             self.downloadSpeed))
 
 class StreamerShutdown(Exception): pass
 
 class Streamer(TwythonStreamer):
-    def __init__(self, limitNoticeQueue, locations, *args, **kwargs):
+    def __init__(self, tweetAddedQueue, limitNoticeQueue, locations, *args, **kwargs):
         TwythonStreamer.__init__(self, *args, **kwargs)
+        self.tweetAddedQueue = tweetAddedQueue
         self.limitNoticeQueue = limitNoticeQueue
         self.locations = locations
 
@@ -110,12 +62,11 @@ class Streamer(TwythonStreamer):
 
         if 'geo' not in data:
             #print('not a tweet, skipping')
-            print(json.dumps(data, indent = 4, separators = (',', ': ')))
+            #print(json.dumps(data, indent = 4, separators = (',', ': ')))
             return
 
         if data['geo'] is None:
             #print('error: no geolocation')
-            #print(json.dumps(data, indent = 4, separators = (',', ': ')))
             return
 
         (Tweet(tweetid = data['id'],
@@ -124,42 +75,122 @@ class Streamer(TwythonStreamer):
                geo = data['geo']['coordinates'])
         ).save()
 
+        self.tweetAddedQueue.put(1) # anything will do
+
     def on_error(self, status_code, data):
         print('ERROR: %d' % status_code)
         print(data)
 
         if status_code == 420:
-            print('420 error received, restarting a 90 second wait period')
+            print('420 error received, restarting after a 90 second wait period')
 
         self.disconnect()
         time.sleep(90)
         self.statuses.filter(locations = self.locations)
 
-def spawn(limitNoticeQueue, vsp):
+class StreamerSubprocess(object):
+    def __init__(self, tweetAddedQueue, coordinates):
+        self.limitNoticeQueue = multiprocessing.Queue()
+        self.lastLimitNoticeTime = 0.0
+        self.coordinates = coordinates
+        self.process = multiprocessing.Process(target=spawnStreamer,
+                                               args=([ tweetAddedQueue,
+                                                       self.limitNoticeQueue,
+                                                       coordinates ]))
+        self.process.start()
+
+    def updateLimitNoticeTime(self):
+        while not self.limitNoticeQueue.empty():
+            noticeTime = self.limitNoticeQueue.get()
+            print(noticeTime - self.lastLimitNoticeTime)
+            self.lastLimitNoticeTime = noticeTime
+
+    def terminate(self):
+        self.process.terminate()
+        #TODO: graceful exit?
+
+class Client(object):
+    def waitForCoordinates(self):
+        print('waiting for coordinates...')
+        self.coordinates = None
+        while not self.coordinates:
+            try:
+                msg = self.socket.recv()
+                if msg['type'] == 'areaDefinition':
+                    self.resetStreamers(msg['area'])
+                else:
+                    print('received message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
+            except NoMessageAvailable:
+                pass
+
+    def __init__(self, hostname, port):
+        self.overflow = False;
+        self.socket = JSONSocket()
+        self.socket.connect((hostname, port))
+        self.tweetCounter = TweetCounter()
+        self.subprocesses = []
+        self.waitForCoordinates()
+
+    def getCoordinates(self):
+        return self.coordinates
+
+    def resetStreamers(self, coordinates):
+        # TODO: podzielic jakos inteligentnie
+        for subprocess in self.subprocesses:
+            subprocess.terminate()
+        self.subprocesses = []
+
+        self.coordinates = coordinates
+        print('gathering tweets from area: %s' % self.coordinates)
+        for n in range(1):
+            subprocess = StreamerSubprocess(self.tweetCounter.tweetAddedQueue,
+                                            self.coordinates)
+            self.subprocesses.append(subprocess)
+
+    def run(self):
+        while (True):
+            # po zapytaniu servera czy zyjemy pasuje mu odpowiedziec ( i powiedziec czy mamy przepelnienei czy nie),
+            # serwer moze nam powiedziec bysmy zmienili wspolrzedne po ktorych "szukamy"
+            self.tweetCounter.count()
+            self.socket.send({
+                'type': 'statusReport',
+                'downloadSpeed': self.tweetCounter.downloadSpeed
+            })
+
+            for subprocess in self.subprocesses:
+                subprocess.updateLimitNoticeTime()
+
+            # TODO: jakis komunikat o osiagnieciu limitu, jesli twitter wysle takie info
+
+            try:
+                msg = self.socket.recv()
+                if msg['type'] == 'areaDefinition':
+                    self.resetStreamers(msg['area'])
+                # TODO: obsluga innych wiadomosci od serwera
+            except NoMessageAvailable:
+                pass
+
+            time.sleep(0.5)
+
+def spawnStreamer(tweetAddedQueue, limitNoticeQueue, vsp):
     global twitterKeys
-    twitterKey =  random.choice(twitterKeys)
+    twitterKey = random.choice(twitterKeys)
 
     while True:
         try:
-            stream = Streamer(limitNoticeQueue, vsp, *twitterKey)
+            stream = Streamer(tweetAddedQueue, limitNoticeQueue, vsp, *twitterKey)
         except StreamerShutdown:
             print('streamer shutting down')
             return
         except Exception as e:
-            print(e)
+            traceback.print_exc()
             print('error occurred, restarting streamer')
+
 
 twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
 
-mongo.connect('twitter')
-limitNoticeQueue = multiprocessing.Queue()
+mongo.connect('twitter2')
 
-client = Client('127.0.0.1', 12346, TweetCounter(), limitNoticeQueue)
-client.start()
-
-coordinates = client.getCoordinates()
-
-for n in range(1):
-    process = multiprocessing.Process(target=spawn, args=([limitNoticeQueue], coordinates))
-    process.start()
+client = Client('127.0.0.1', 12346)
+client.run()
 
