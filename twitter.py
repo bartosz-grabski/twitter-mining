@@ -2,7 +2,7 @@ from threading import Thread
 from sys import stdout
 from time import sleep
 from twython import TwythonStreamer
-from json_socket import JSONSocket, NoMessageAvailable
+from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
 
 import random
 import json
@@ -105,6 +105,7 @@ class Streamer(TwythonStreamer):
 
         if data['geo'] is None:
             #print('error: no geolocation')
+            print(json.dumps(data, indent = 4, separators = (',', ': ')))
             return
 
         geo = data['geo']['coordinates']

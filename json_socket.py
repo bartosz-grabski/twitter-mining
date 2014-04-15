@@ -5,6 +5,7 @@ import os
 import errno
 
 class NoMessageAvailable(Exception): pass
+class ConnectionLost(Exception): pass
 
 class JSONSocket(socket.socket):
     @staticmethod
@@ -36,7 +37,6 @@ class JSONSocket(socket.socket):
         if not isinstance(obj, dict):
             raise AssertionError('only dictionaries allowed for now')
 
-        print('sending %s' % str(obj))
         self.socket.send(json.dumps(obj))
 
     def recv(self):
@@ -45,10 +45,12 @@ class JSONSocket(socket.socket):
         except socket.error as e:
             err = e.args[0]
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                print('no message')
                 raise NoMessageAvailable()
             else:
                 raise e
+
+        if self.bufferedData == '':
+            raise ConnectionLost()
 
         openingBracePos = self.bufferedData.find('{')
         if openingBracePos == -1:
@@ -71,9 +73,7 @@ class JSONSocket(socket.socket):
         if endOfMessage != -1:
             msg = self.bufferedData[:endOfMessage]
             self.bufferedData = self.bufferedData[endOfMessage:]
-            print('recv %s' % msg)
             return json.loads(msg)
 
-        print('no message')
         raise NoMessageAvailable()
 

@@ -1,13 +1,14 @@
 #!/usr/bin/python
 
 from threading import Thread
-from json_socket import JSONSocket, NoMessageAvailable
+from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
 import time
 import json
 
 class Puppet(object):
-    def __init__(self, socket, coordinates):
+    def __init__(self, socket, remoteAddress, coordinates):
         self.socket = socket
+        self.remoteAddress = remoteAddress
         self.coordinates = coordinates
 
 class Master(Thread):
@@ -27,13 +28,21 @@ class Master(Thread):
 
     def run(self):
         while (True):
-            for puppet in puppets:
+            disconnected = []
+            for puppet in self.puppets:
                 try:
                     msg = puppet.socket.recv()
                     print('recevied message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
                     #TODO: handle message
                 except NoMessageAvailable:
                     pass
+                except ConnectionLost:
+                    print('connection lost with %s:%d' % puppet.remoteAddress)
+                    disconnected.append(puppet)
+
+            for puppet in disconnected:
+                self.puppets.remove(puppet)
+                #TODO: make some other puppet take the disconnected one's area
 
             time.sleep(1)
 
@@ -59,6 +68,7 @@ class Server(object):
             coords = self.get_coordinates()
             self.puppets.append(
                 Puppet(socket = clientSocket,
+                       remoteAddress = clientAddr,
                        coordinates = coords)
             )
 
