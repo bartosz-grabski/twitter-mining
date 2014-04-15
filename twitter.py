@@ -12,15 +12,11 @@ import string
 import time
 import math
 
-class GeoPoint(mongo.EmbeddedDocument):
-    longitude = mongo.fields.FloatField(required = True)
-    latitude = mongo.fields.FloatField(required = True)
-
 class Tweet(mongo.Document):
     tweetid = mongo.fields.IntField(required = True)
     userid = mongo.fields.IntField(required = True)
     text = mongo.fields.StringField(required = True, max_length = 200)
-    geo = GeoPoint(required = True)
+    geo = mongo.fields.ListField(mongo.fields.FloatField(), required = True)
 
 class User(mongo.Document):
     userid = mongo.fields.IntField(required = True)
@@ -62,7 +58,7 @@ class Client(Thread):
                 pass
         print('got: %s' % self.coordinates)
 
-    def __init__ (self, hostname, port, tweetCounter, limitNoticeQueue):
+    def __init__(self, hostname, port, tweetCounter, limitNoticeQueue):
         Thread.__init__(self)
         self.overflow = False;
         self.socket = JSONSocket()
@@ -92,15 +88,21 @@ class Client(Thread):
 
             try:
                 msg = self.socket.recv()
+                # TODO: obsluga wiadomosci od serwera
             except NoMessageAvailable:
                 pass
 
             time.sleep(0.5)
 
+class StreamerShutdown(Exception): pass
+
 class Streamer(TwythonStreamer):
-    def __init__(self, limitNoticeQueue, *args, **kwargs):
+    def __init__(self, limitNoticeQueue, locations, *args, **kwargs):
         TwythonStreamer.__init__(self, *args, **kwargs)
         self.limitNoticeQueue = limitNoticeQueue
+        self.locations = locations
+
+        self.statuses.filter(locations = self.locations)
 
     def on_success(self, data):
         if 'limit' in data:
@@ -116,33 +118,40 @@ class Streamer(TwythonStreamer):
             #print(json.dumps(data, indent = 4, separators = (',', ': ')))
             return
 
-        geo = data['geo']['coordinates']
         (Tweet(tweetid = data['id'],
-              userid = data['user']['id'],
-              text = data['text'],
-              geo = GeoPoint(longitude = geo[1],
-                             latitude = geo[0]))
+               userid = data['user']['id'],
+               text = data['text'],
+               geo = data['geo']['coordinates'])
         ).save()
 
     def on_error(self, status_code, data):
         print('ERROR: %d' % status_code)
         print(data)
 
+        if status_code == 420:
+            print('420 error received, restarting a 90 second wait period')
+
         self.disconnect()
+        time.sleep(90)
+        self.statuses.filter(locations = self.locations)
 
 def spawn(limitNoticeQueue, vsp):
     global twitterKeys
     twitterKey =  random.choice(twitterKeys)
 
-    try:
-        stream = Streamer(limitNoticeQueue, *twitterKey)
-        stream.statuses.filter(locations = vsp)
-    finally:
-        pass
+    while True:
+        try:
+            stream = Streamer(limitNoticeQueue, vsp, *twitterKey)
+        except StreamerShutdown:
+            print('streamer shutting down')
+            return
+        except Exception as e:
+            print(e)
+            print('error occurred, restarting streamer')
 
 twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
 
-mongo.connect('twitter2')
+mongo.connect('twitter')
 limitNoticeQueue = multiprocessing.Queue()
 
 client = Client('127.0.0.1', 12346, TweetCounter(), limitNoticeQueue)

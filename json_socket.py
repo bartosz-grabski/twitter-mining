@@ -69,11 +69,17 @@ class JSONSocket(socket.socket):
 
             if braceLevel == 0:
                 endOfMessage = idx + 1
+                break
 
         if endOfMessage != -1:
             msg = self.bufferedData[:endOfMessage]
             self.bufferedData = self.bufferedData[endOfMessage:]
-            return json.loads(msg)
+            try:
+                return json.loads(msg)
+            except ValueError as e:
+                print('error occurred for:')
+                print(msg)
+                self.bufferedData = ''
 
         raise NoMessageAvailable()
 
