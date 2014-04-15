@@ -29,8 +29,7 @@ class User(mongo.Document):
 
 
 class TweetCounter:
-    def __init__(self, tweetTimeQueue):
-        self.tweetTimeQueue = tweetTimeQueue
+    def __init__(self):
         self.startTime = time.time()
         self.lastSecondTweets = 0
         self.downloadSpeed = 0.0
@@ -63,13 +62,14 @@ class Client(Thread):
                 pass
         print('got: %s' % self.coordinates)
 
-    def __init__ (self, hostname, port, tweetCounter):
+    def __init__ (self, hostname, port, tweetCounter, limitNoticeQueue):
         Thread.__init__(self)
         self.overflow = False;
         self.socket = JSONSocket()
         self.socket.connect((hostname, port))
         self.tweetCounter = tweetCounter
         self.coordinates = None
+        self.limitNoticeQueue = limitNoticeQueue
         self.waitForCoordinates()
 
     def getCoordinates(self):
@@ -85,6 +85,11 @@ class Client(Thread):
                 'downloadSpeed': self.tweetCounter.downloadSpeed
             })
 
+            while not self.limitNoticeQueue.empty():
+                noticeTime = self.limitNoticeQueue.get()
+                print(noticeTime - self.lastLimitNoticeTime)
+                self.lastLimitNoticeTime = noticeTime
+
             try:
                 msg = self.socket.recv()
             except NoMessageAvailable:
@@ -93,11 +98,14 @@ class Client(Thread):
             time.sleep(0.5)
 
 class Streamer(TwythonStreamer):
-    def __init__(self, tweetTimeQueue, *args, **kwargs):
+    def __init__(self, limitNoticeQueue, *args, **kwargs):
         TwythonStreamer.__init__(self, *args, **kwargs)
-        self.tweetTimeQueue = tweetTimeQueue
+        self.limitNoticeQueue = limitNoticeQueue
 
     def on_success(self, data):
+        if 'limit' in data:
+            self.limitNoticeQueue.put(time.time())
+
         if 'geo' not in data:
             #print('not a tweet, skipping')
             print(json.dumps(data, indent = 4, separators = (',', ': ')))
@@ -105,7 +113,7 @@ class Streamer(TwythonStreamer):
 
         if data['geo'] is None:
             #print('error: no geolocation')
-            print(json.dumps(data, indent = 4, separators = (',', ': ')))
+            #print(json.dumps(data, indent = 4, separators = (',', ': ')))
             return
 
         geo = data['geo']['coordinates']
@@ -116,20 +124,18 @@ class Streamer(TwythonStreamer):
                              latitude = geo[0]))
         ).save()
 
-        tweetTimeQueue.put(time.time())
-
     def on_error(self, status_code, data):
         print('ERROR: %d' % status_code)
         print(data)
 
         self.disconnect()
 
-def spawn(tweetTimeQueue, vsp):
+def spawn(limitNoticeQueue, vsp):
     global twitterKeys
     twitterKey =  random.choice(twitterKeys)
 
     try:
-        stream = Streamer(tweetTimeQueue, *twitterKey)
+        stream = Streamer(limitNoticeQueue, *twitterKey)
         stream.statuses.filter(locations = vsp)
     finally:
         pass
@@ -137,15 +143,14 @@ def spawn(tweetTimeQueue, vsp):
 twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
 
 mongo.connect('twitter2')
-tweetTimeQueue = multiprocessing.Queue()
+limitNoticeQueue = multiprocessing.Queue()
 
-counter = TweetCounter(tweetTimeQueue)
-client = Client('127.0.0.1', 12346, counter)
+client = Client('127.0.0.1', 12346, TweetCounter(), limitNoticeQueue)
 client.start()
 
 coordinates = client.getCoordinates()
 
 for n in range(1):
-    process = multiprocessing.Process(target=spawn, args=([tweetTimeQueue], coordinates))
+    process = multiprocessing.Process(target=spawn, args=([limitNoticeQueue], coordinates))
     process.start()
 
