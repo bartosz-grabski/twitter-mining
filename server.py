@@ -2,7 +2,7 @@
 
 from threading import Thread
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
-from data_model import Tweet
+from data_model import AbstractTweet, GenericTweet
 import time
 import json
 import operator
@@ -30,7 +30,7 @@ class Master(Thread):
         pass
 
     def run(self):
-        prevTweetCount = len(Tweet.objects)
+        prevTweetCount = len(GenericTweet.objects)
         prevTime = time.time()
 
         while (True):
@@ -51,11 +51,11 @@ class Master(Thread):
                 self.puppets.remove(puppet)
                 #TODO: make some other puppet take the disconnected one's area
 
-            tweetCount = len(Tweet.objects)
+            tweetCount = len(GenericTweet.objects)
             now = time.time()
 
             print('master of %d puppets: %d tweets in databse, total download speed = %.3f/s'
-                  % (len(self.puppets), len(Tweet.objects),
+                  % (len(self.puppets), len(GenericTweet.objects),
                      float(tweetCount - prevTweetCount) / (now - prevTime)))
 
             prevTweetCount = tweetCount

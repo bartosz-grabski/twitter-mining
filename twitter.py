@@ -2,7 +2,7 @@ from sys import stdout
 from time import sleep
 from twython import TwythonStreamer
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
-from data_model import Tweet
+from data_model import GenericTweet, EnglishTweet
 
 import random
 import json
@@ -35,6 +35,7 @@ class TweetCounter:
 
 class StreamerShutdown(Exception): pass
 
+
 class Streamer(TwythonStreamer):
     def __init__(self, tweetAddedQueue, limitNoticeQueue, locations, *args, **kwargs):
         TwythonStreamer.__init__(self, *args, **kwargs)
@@ -57,13 +58,35 @@ class Streamer(TwythonStreamer):
             #print('error: no geolocation')
             return
 
-        (Tweet(tweetid = data['id'],
-               userid = data['user']['id'],
-               text = data['text'],
-               geo = data['geo']['coordinates'])
-        ).save()
+        if 'lang' in data and data['lang'] == 'en':
+            Streamer.save_english_tweet(data)
+        Streamer.save_generic_tweet(data)
 
         self.tweetAddedQueue.put(1) # anything will do
+
+    @staticmethod
+    def save_english_tweet(data):
+        tweet = Streamer.create_tweet(EnglishTweet, data)
+        tweet.save()
+
+    @staticmethod
+    def create_tweet(constructor_method, data):
+        return constructor_method(
+            tweetid=data['id'],
+            userid=data['user']['id'],
+            text=data['text'],
+            in_reply_to_id=data['in_reply_to_status_id'],
+            username=data['user']['name'],
+            screen_name=data['user']['screen_name'],
+            description=data['user']['description'],
+            geo=data['geo']['coordinates']
+        )
+
+    @staticmethod
+    def save_generic_tweet(data):
+        tweet = Streamer.create_tweet(GenericTweet, data)
+        tweet.lang = data['lang'] if 'lang' in data else None
+        tweet.save()
 
     def on_error(self, status_code, data):
         print('ERROR: %d' % status_code)
@@ -75,6 +98,7 @@ class Streamer(TwythonStreamer):
         self.disconnect()
         time.sleep(90)
         self.statuses.filter(locations = self.locations)
+
 
 class StreamerSubprocess(object):
     def __init__(self, tweetAddedQueue, coordinates):
