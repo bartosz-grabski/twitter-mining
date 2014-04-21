@@ -60,6 +60,10 @@ class Streamer(TwythonStreamer):
         (Tweet(tweetid = data['id'],
                userid = data['user']['id'],
                text = data['text'],
+               in_reply_to_id=data['in_reply_to_status_id'],
+               username=data['user']['name'],
+               screen_name=data['user']['screen_name'],
+               description=data['user']['description'],
                geo = data['geo']['coordinates'])
         ).save()
 
