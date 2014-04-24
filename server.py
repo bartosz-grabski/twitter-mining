@@ -184,7 +184,7 @@ signal.signal(signal.SIGTERM, shutdownSignalHandler)
 
 signal.signal(signal.SIGUSR1, sigusr1Handler)
 
-SERVER_HOST = '127.0.0.1'
+SERVER_HOST = '0.0.0.0'
 SERVER_PORT = 12346
 
 DB_HOST = '127.0.0.1'
@@ -198,17 +198,16 @@ if len(sys.argv) > 1 and sys.argv[1] == '-v':
     VERBOSE = True
     print('verbose mode on')
 
-if len(sys.argv) not in [ 1, 3, 6 ]:
-    print('usage: server.py [ -v ] server_host server_port [ db_host db_port db_name ]')
+if len(sys.argv) not in [ 1, 2, 5 ]:
+    print('usage: server.py [ -v ] server_port [ db_host db_port db_name ]')
     sys.exit(1)
 
-if len(sys.argv) >= 3:
-    SERVER_HOST = sys.argv[1]
-    SERVER_PORT = int(sys.argv[2])
-if len(sys.argv) == 6:
-    DB_HOST = sys.argv[3]
-    DB_PORT = int(sys.argv[4])
-    DB_NAME = sys.argv[5]
+if len(sys.argv) >= 2:
+    SERVER_PORT = int(sys.argv[1])
+if len(sys.argv) == 5:
+    DB_HOST = sys.argv[2]
+    DB_PORT = int(sys.argv[3])
+    DB_NAME = sys.argv[4]
 
 dbAddress = 'mongodb://%s:%d/%s' % (DB_HOST, DB_PORT, DB_NAME)
 puppets  = []
