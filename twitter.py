@@ -125,15 +125,16 @@ class Client(object):
     def handleMessage(self, msg):
         if msg['type'] == 'databaseAddress':
             self.setDatabase(msg['address'])
-        if msg['type'] == 'areaDefinition':
+        elif msg['type'] == 'areaDefinition':
             self.resetStreamers(msg['area'])
         else:
             print('received message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
 
     def setDatabase(self, dbAddress):
         if self.databaseAddress != dbAddress:
-            self.databaseAddress = dbAddress
+            print('connecting to %s' % dbAddress)
             dbConnect(dbAddress)
+            self.databaseAddress = dbAddress
         else:
             print('db address not changed (%s)' % self.dbAddress)
 
@@ -154,10 +155,8 @@ class Client(object):
         self.socket.connect((hostname, port))
         self.tweetCounter = TweetCounter()
         self.subprocesses = []
+        self.coordinates = None
         self.databaseAddress = None
-
-    def getCoordinates(self):
-        return self.coordinates
 
     def resetStreamers(self, coordinates):
         # TODO: podzielic jakos inteligentnie
