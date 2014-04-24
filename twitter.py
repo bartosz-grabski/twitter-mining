@@ -19,6 +19,7 @@ class TweetCounter:
         self.downloadSpeed = 0.0
         self.lastCheckTime = time.time()
         self.tweetAddedQueue = multiprocessing.Queue()
+        self.totalDownloaded = 0
 
     def count(self):
         now = time.time()
@@ -31,6 +32,7 @@ class TweetCounter:
         deltaTime = now - self.lastCheckTime
         self.downloadSpeed = float(tweetsDownloaded) / deltaTime
         self.lastCheckTime = now
+        self.totalDownloaded += tweetsDownloaded
 
         global VERBOSE
         if VERBOSE:
@@ -219,7 +221,9 @@ def spawnStreamer(tweetAddedQueue, limitNoticeQueue, vsp):
 
 def sigusr1Handler(sigNum, stackFrame):
     global client
-    print >> sys.stderr, ('downloading %.4f tweets/s' % client.tweetCounter.downloadSpeed)
+    counter = client.tweetCounter
+    print >> sys.stderr, ('downloaded %d tweets, current speed: %.4f tweets/s'
+                          % (counter.totalDownloaded, counter.downloadSpeed))
 
 signal.signal(signal.SIGUSR1, sigusr1Handler)
 
