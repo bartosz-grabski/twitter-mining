@@ -150,7 +150,6 @@ class Server(object):
         try:
             while True:
                 try:
-                    print('accepting')
                     self.init_puppet(*self.serverSocket.accept())
                 except SocketError as e:
                     if e[0] != errno.EINTR: # interrupted system call - e.g. signal
