@@ -2,7 +2,7 @@ from sys import stdout
 from time import sleep
 from twython import TwythonStreamer
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
-from data_model import GenericTweet, EnglishTweet
+from data_model import GenericTweet, EnglishTweet, dbConnect
 
 import random
 import json
@@ -11,7 +11,7 @@ import string
 import time
 import math
 import traceback
-
+import sys
 
 class TweetCounter:
     def __init__(self):
@@ -122,16 +122,29 @@ class StreamerSubprocess(object):
         #TODO: graceful exit?
 
 class Client(object):
-    def waitForCoordinates(self):
-        print('waiting for coordinates...')
+    def handleMessage(self, msg):
+        if msg['type'] == 'databaseAddress':
+            self.setDatabase(msg['address'])
+        if msg['type'] == 'areaDefinition':
+            self.resetStreamers(msg['area'])
+        else:
+            print('received message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
+
+    def setDatabase(self, dbAddress):
+        if self.databaseAddress != dbAddress:
+            self.databaseAddress = dbAddress
+            dbConnect(dbAddress)
+        else:
+            print('db address not changed (%s)' % self.dbAddress)
+
+    def initialized(self):
+        return self.databaseAddress and self.coordinates
+
+    def initialize(self):
         self.coordinates = None
-        while not self.coordinates:
+        while not self.initialized():
             try:
-                msg = self.socket.recv()
-                if msg['type'] == 'areaDefinition':
-                    self.resetStreamers(msg['area'])
-                else:
-                    print('received message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
+                self.handleMessage(self.socket.recv())
             except NoMessageAvailable:
                 pass
 
@@ -141,7 +154,7 @@ class Client(object):
         self.socket.connect((hostname, port))
         self.tweetCounter = TweetCounter()
         self.subprocesses = []
-        self.waitForCoordinates()
+        self.databaseAddress = None
 
     def getCoordinates(self):
         return self.coordinates
@@ -160,29 +173,33 @@ class Client(object):
             self.subprocesses.append(subprocess)
 
     def run(self):
-        while (True):
-            # po zapytaniu servera czy zyjemy pasuje mu odpowiedziec ( i powiedziec czy mamy przepelnienei czy nie),
-            # serwer moze nam powiedziec bysmy zmienili wspolrzedne po ktorych "szukamy"
-            self.tweetCounter.count()
-            self.socket.send({
-                'type': 'statusReport',
-                'downloadSpeed': self.tweetCounter.downloadSpeed
-            })
+        try:
+            self.initialize()
 
+            while (True):
+                # po zapytaniu servera czy zyjemy pasuje mu odpowiedziec ( i powiedziec czy mamy przepelnienei czy nie),
+                # serwer moze nam powiedziec bysmy zmienili wspolrzedne po ktorych "szukamy"
+                self.tweetCounter.count()
+                self.socket.send({
+                    'type': 'statusReport',
+                    'downloadSpeed': self.tweetCounter.downloadSpeed
+                })
+
+                for subprocess in self.subprocesses:
+                    subprocess.updateLimitNoticeTime()
+
+                # TODO: jakis komunikat o osiagnieciu limitu, jesli twitter wysle takie info
+
+                try:
+                    self.handleMessage(self.socket.recv())
+                except NoMessageAvailable:
+                    pass
+
+                time.sleep(0.5)
+        finally:
+            print('cleaning up subprocesses...')
             for subprocess in self.subprocesses:
-                subprocess.updateLimitNoticeTime()
-
-            # TODO: jakis komunikat o osiagnieciu limitu, jesli twitter wysle takie info
-
-            try:
-                msg = self.socket.recv()
-                if msg['type'] == 'areaDefinition':
-                    self.resetStreamers(msg['area'])
-                # TODO: obsluga innych wiadomosci od serwera
-            except NoMessageAvailable:
-                pass
-
-            time.sleep(0.5)
+                subprocess.terminate()
 
 def spawnStreamer(tweetAddedQueue, limitNoticeQueue, vsp):
     global twitterKeys
@@ -199,8 +216,22 @@ def spawnStreamer(tweetAddedQueue, limitNoticeQueue, vsp):
             print('error occurred, restarting streamer')
 
 
-twitterKeys = [ x.strip().split(',') for x in open('auth').readlines() ]
+AUTH_FILE = 'auth'
+SERVER_HOST = '127.0.0.1'
+SERVER_PORT = 12346
 
-client = Client('127.0.0.1', 12346)
+
+if len(sys.argv) not in [ 3, 4 ]:
+    print('usage: twitter.py server_host server_port [ auth_file ]')
+    sys.exit(1)
+
+if len(sys.argv) == 4: AUTH_FILE = sys.argv[3]
+if len(sys.argv) >= 3:
+    SERVER_HOST = sys.argv[1]
+    SERVER_PORT = int(sys.argv[2])
+
+twitterKeys = [ x.strip().split(',') for x in open(AUTH_FILE).readlines() ]
+
+client = Client(SERVER_HOST, SERVER_PORT)
 client.run()
 

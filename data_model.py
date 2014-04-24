@@ -30,5 +30,6 @@ class GenericTweet(AbstractTweet):
 #    name = mongo.fields.StringField(required = True)
 #    tags = mongo.fields.ListField(mongo.fields.StringField())
 
-mongo.connect('twitter2')
+def dbConnect(dbAddress):
+    mongo.connect(dbAddress.split('/')[-1], host=dbAddress)
 

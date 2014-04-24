@@ -29,6 +29,11 @@ class JSONSocket(socket.socket):
     def listen(self, *args, **kwargs):
         return self.socket.listen(*args, **kwargs)
 
+    def shutdown(self):
+        return self.socket.shutdown(socket.SHUT_RDWR)
+    def close(self):
+        return self.socket.close()
+
     def accept(self, *args, **kwargs):
         sock, addr = self.socket.accept(*args, **kwargs)
         return JSONSocket.wrapSocket(sock), addr
