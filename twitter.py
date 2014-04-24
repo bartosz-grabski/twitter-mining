@@ -12,6 +12,7 @@ import time
 import math
 import traceback
 import sys
+import signal
 
 class TweetCounter:
     def __init__(self):
@@ -31,7 +32,9 @@ class TweetCounter:
         self.downloadSpeed = float(tweetsDownloaded) / deltaTime
         self.lastCheckTime = now
 
-        print('downloading %.4f tweets/s' % self.downloadSpeed)
+        global VERBOSE
+        if VERBOSE:
+            print('downloading %.4f tweets/s' % self.downloadSpeed)
 
 class StreamerShutdown(Exception): pass
 
@@ -214,14 +217,25 @@ def spawnStreamer(tweetAddedQueue, limitNoticeQueue, vsp):
             traceback.print_exc()
             print('error occurred, restarting streamer')
 
+def sigusr1Handler(sigNum, stackFrame):
+    global client
+    print >> sys.stderr, ('downloading %.4f tweets/s' % client.tweetCounter.downloadSpeed)
+
+signal.signal(signal.SIGUSR1, sigusr1Handler)
 
 AUTH_FILE = 'auth'
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 12346
 
+VERBOSE = False
+
+if len(sys.argv) > 1 and sys.argv[1] == '-v':
+    sys.argv.remove('-v')
+    VERBOSE = True
+    print('verbose mode on')
 
 if len(sys.argv) not in [ 3, 4 ]:
-    print('usage: twitter.py server_host server_port [ auth_file ]')
+    print('usage: twitter.py [ -v ] server_host server_port [ auth_file ]')
     sys.exit(1)
 
 if len(sys.argv) == 4: AUTH_FILE = sys.argv[3]

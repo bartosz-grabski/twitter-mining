@@ -9,6 +9,7 @@ import json
 import operator
 import sys
 import signal
+import errno
 
 class Puppet(object):
     def __init__(self, socket, remoteAddress, coordinates):
@@ -61,10 +62,12 @@ class Master(Thread):
 
             tweetCount = len(GenericTweet.objects)
             now = time.time()
+            self.downloadSpeed = float(tweetCount - prevTweetCount) / (now - prevTime)
 
-            print('master of %d puppets: %d tweets in databse, total download speed = %.3f/s'
-                  % (len(self.puppets), len(GenericTweet.objects),
-                     float(tweetCount - prevTweetCount) / (now - prevTime)))
+            global VERBOSE
+            if VERBOSE:
+                print('master of %d puppets: %d tweets in database, total download speed = %.3f/s'
+                      % (len(self.puppets), len(GenericTweet.objects), self.downloadSpeed))
 
             prevTweetCount = tweetCount
             prevTime = now
@@ -146,9 +149,14 @@ class Server(object):
 
         try:
             while True:
-                self.init_puppet(*self.serverSocket.accept())
+                try:
+                    print('accepting')
+                    self.init_puppet(*self.serverSocket.accept())
+                except SocketError as e:
+                    if e[0] != errno.EINTR: # interrupted system call - e.g. signal
+                        raise
         except SocketError as e:
-            print('\nserver shutdown. reason: %s (errno = %d)' % (e[1], e[0]))
+            print('\nserver shutdown. reason: %s' % e)
 
     def shutdown(self):
         self.masterThread.shutdown()
@@ -164,8 +172,17 @@ def shutdownSignalHandler(sigNum, stackFrame):
     print('caught signal: %d' % sigNum)
     server.shutdown()
 
+def sigusr1Handler(sigNum, stackFrame):
+    global server
+    print >> sys.stderr, ('master of %d puppets: %d tweets in database, total download speed = %.3f/s'
+         % (len(server.masterThread.puppets),
+            len(GenericTweet.objects),
+            server.masterThread.downloadSpeed))
+
 signal.signal(signal.SIGINT, shutdownSignalHandler)
 signal.signal(signal.SIGTERM, shutdownSignalHandler)
+
+signal.signal(signal.SIGUSR1, sigusr1Handler)
 
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 12346
@@ -174,8 +191,15 @@ DB_HOST = '127.0.0.1'
 DB_PORT = 27017
 DB_NAME = 'twitter'
 
+VERBOSE = False
+
+if len(sys.argv) > 1 and sys.argv[1] == '-v':
+    sys.argv.remove('-v')
+    VERBOSE = True
+    print('verbose mode on')
+
 if len(sys.argv) not in [ 1, 3, 6 ]:
-    print('usage: server.py server_host server_port [ db_host db_port db_name ]')
+    print('usage: server.py [ -v ] server_host server_port [ db_host db_port db_name ]')
     sys.exit(1)
 
 if len(sys.argv) >= 3:
