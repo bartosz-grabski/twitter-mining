@@ -16,11 +16,16 @@ class Puppet(object):
         self.remoteAddress = remoteAddress
         self.coordinates = coordinates
         self.downloadSpeed = 0.0
+        self.timeLastSeen = time.time()
 
     def shutdown(self):
         print('connection shutting down: %s:%d' % self.remoteAddress)
         self.socket.shutdown()
         self.socket.close()
+
+    def isConnectionTimedOut(self):
+        TIMEOUT_S = 5
+        return time.time() - self.timeLastSeen > TIMEOUT_S
 
 class Master(Thread):
     def __init__ (self, puppets):
@@ -37,12 +42,15 @@ class Master(Thread):
             disconnected = []
             for puppet in self.puppets:
                 try:
-                    msg = puppet.socket.recv()
-                    #print('recevied message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
-                    puppet.downloadSpeed = msg['downloadSpeed']
-                    #TODO: handle message?
-                except NoMessageAvailable:
-                    pass
+                    try:
+                        msg = puppet.socket.recv()
+                        #print('recevied message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
+                        puppet.downloadSpeed = msg['downloadSpeed']
+                        puppet.timeLastSeen = time.time()
+                        #TODO: handle message?
+                    except NoMessageAvailable:
+                        if puppet.isConnectionTimedOut():
+                            raise ConnectionLost('timeout')
                 except ConnectionLost:
                     print('connection lost with %s:%d' % puppet.remoteAddress)
                     disconnected.append(puppet)
