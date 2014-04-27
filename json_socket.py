@@ -49,8 +49,9 @@ class JSONSocket(socket.socket):
             self.bufferedData += self.socket.recv(1024)
         except socket.error as e:
             err = e.args[0]
-            if err in [ errno.EAGAIN, errno.EWOULDBLOCK ] and not self.bufferedData:
-                raise NoMessageAvailable()
+            if err in [ errno.EAGAIN, errno.EWOULDBLOCK ]:
+                if not self.bufferedData:
+                    raise NoMessageAvailable()
             else:
                 raise e
 
