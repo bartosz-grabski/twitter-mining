@@ -1,4 +1,3 @@
-
 var map;
 var markers = [];
 var geohashCells = [];
@@ -48,7 +47,7 @@ function fetchFacets() {
     console.log("querying with factor " + factor);
     $.ajax({
 
-        url: "http://localhost:9200/twitter_generic/_search?search_type=count&pretty=1",
+        url: "http://localhost:9200/twitter/_search?search_type=count",
         contentType: "text/json",
         type: "POST",
         data: JSON.stringify({
