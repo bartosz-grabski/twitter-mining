@@ -2,7 +2,7 @@
 
 from threading import Thread
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
-from data_model import AbstractTweet, GenericTweet, dbConnect
+from data_model import AbstractTweet, GenericTweet, dbConnect, genericSize
 from socket import error as SocketError
 import time
 import json
@@ -25,30 +25,28 @@ class Puppet(object):
         self.socket.close()
 
     def isConnectionTimedOut(self):
-        TIMEOUT_S = 5
+        TIMEOUT_S = 10.0
         return time.time() - self.timeLastSeen > TIMEOUT_S
 
 class Master(Thread):
-    def __init__ (self, puppets):
+    def __init__ (self, server, puppets):
         Thread.__init__(self)
         self.puppets = puppets
         self.overflow = False
         self.running = True
+        self.server = server
 
     def run(self):
-        prevTweetCount = len(GenericTweet.objects)
+        prevTweetsSize = genericSize()
         prevTime = time.time()
-
         while self.running:
             disconnected = []
             for puppet in self.puppets:
                 try:
                     try:
                         msg = puppet.socket.recv()
-                        #print('recevied message:\n%s' % json.dumps(msg, indent = 4, separators = (',', ': ')))
                         puppet.downloadSpeed = msg['downloadSpeed']
                         puppet.timeLastSeen = time.time()
-                        #TODO: handle message?
                     except NoMessageAvailable:
                         if puppet.isConnectionTimedOut():
                             raise ConnectionLost('timeout')
@@ -58,22 +56,34 @@ class Master(Thread):
 
             for puppet in disconnected:
                 self.puppets.remove(puppet)
-                #TODO: make some other puppet take the disconnected one's area
-
-            tweetCount = len(GenericTweet.objects)
-            now = time.time()
-            self.downloadSpeed = float(tweetCount - prevTweetCount) / (now - prevTime)
+            if disconnected:
+                copy = self.puppets[:]
+                self.puppets[:] = []
+                for puppet in copy:
+                    if not self.puppets:
+                        coords = [-180.0, -90.0, 180.0, 90.0]
+                    else:
+                        busiest = self.server.get_busiest_puppet()
+                        busiest.coordinates, coords = self.server.split_coordinates(busiest.coordinates)
+                        busiest.socket.send({
+                            'type': 'areaDefinition',
+                            'area': busiest.coordinates
+                        })
+                    puppet.socket.send({
+                            'type': 'areaDefinition',
+                            'area': coords
+                        })
+                    puppet.coordinates = coords
+                    self.puppets.append(puppet)
+            self.downloadSpeed = (genericSize() - prevTweetsSize) / (time.time()-prevTime)
 
             global VERBOSE
             if VERBOSE:
                 print('master of %d puppets: %d tweets in database, total download speed = %.3f/s'
-                      % (len(self.puppets), len(GenericTweet.objects), self.downloadSpeed))
-
-            prevTweetCount = tweetCount
-            prevTime = now
-
-            time.sleep(1)
-
+                      % (len(self.puppets), genericSize(), self.downloadSpeed))
+            prevTweetsSize = genericSize()
+            prevTime = time.time()
+            time.sleep(max(1-(time.time() - prevTime),1))
     def shutdown(self):
         print('master thread shutting down')
         self.running = False
@@ -136,13 +146,13 @@ class Server(object):
             print('fatal error: cannot connect to database')
             sys.exit(1)
 
-        self.masterThread = Master(self.puppets)
+        self.masterThread = Master(self, self.puppets)
         self.masterThread.start()
 
         try:
             self.serverSocket = JSONSocket()
             self.serverSocket.bind((serverHost, serverPort))
-            self.serverSocket.listen(5)
+            self.serverSocket.listen(1)
         except SocketError:
             self.shutdown()
             return
