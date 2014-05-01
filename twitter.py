@@ -13,7 +13,6 @@ import math
 import traceback
 import sys
 import signal
-import geohash
 
 class TweetCounter:
     def __init__(self):
@@ -77,8 +76,6 @@ class Streamer(TwythonStreamer):
 
     @staticmethod
     def create_tweet(constructor_method, data):
-        hash = geohash.encode(data['geo']['coordinates'][0],data['geo']['coordinates'][1])
-        geo = { 'lat': data['geo']['coordinates'][0], 'lon': data['geo']['coordinates'][1]}
         return constructor_method(
             tweetid=data['id'],
             userid=data['user']['id'],
@@ -86,9 +83,8 @@ class Streamer(TwythonStreamer):
             in_reply_to_id=data['in_reply_to_status_id'],
             username=data['user']['name'],
             screen_name=data['user']['screen_name'],
-            description=data['user']['description'],
-            location=geo,
-            geohash=hash
+            description=data['user']['description'], 
+            geo=data['geo']['coordinates']
         )
 
     @staticmethod
