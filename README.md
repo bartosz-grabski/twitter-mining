@@ -25,11 +25,14 @@ Załóżmy, że chcemy wyświetlać tweety, które znajdują się w bazie lokaln
 
 #####Konfiguracja Mongo:
 
-1. Odpalalamy mongo jako replikę.
+1. Odpalalamy mongo jako replikę
+
         $ sudo ./mongod --replSet "rs0"
 2. Łączymy się z bazą
+
         $ ./mongo
 3. Potem w terminalu 
+
         $ use twitter
         $ rs.initiate()
         
@@ -94,6 +97,7 @@ Załóżmy, że chcemy wyświetlać tweety, które znajdują się w bazie lokaln
         }'
 4. Po wykonaniu powyższych komend utworzyliśmy indeks o nazwie 'twitter' z elementami o typie 'generic_tweet', które pobieramy z lokalnej bazy 'twitter' i kolekcji 'generic_tweet'.
 5. Restatrujemy Elasticrearch. Aby sprawdzić czy wszystko działa wpisujemy w przegladarke:
+
         $ http://localhost:9200/twitter/_search?search_type=count&pretty=1
 6. Jeśli otrzymaliśmy JSONa z odpowiedzią, gdzie klucz "total" jest rózny od zera to prawdopodobnie wszystko jest ok.
     
