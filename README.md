@@ -37,12 +37,15 @@ Załóżmy, że chcemy wyświetlać tweety, które znajdują się w bazie lokaln
 #####Konfiguracja Elasticsearch:
 
 1. Bedąc w głównym katalogu pobieramy potrzebne wtyczki:
+
         $ ./bin/plugin -install elasticsearch/elasticsearch-mapper-attachments/1.9.0
         $ ./bin/plugin --install com.github.richardwilly98.elasticsearch/elasticsearch-river-mongodb/2.0.0
         $ ./bin/plugin --url https://github.com/triforkams/geohash-facet/releases/download/geohash-facet-0.0.14/geohash-facet-0.0.14.jar --install geohash-facet
 2. Uruchamiamy Elasticsearch
+
         $ ./bin/elasticsearch
 3. Teraz konfiguracja: 
+
         $ curl -XPUT 'localhost:9200/twitter' -d '{
             "mappings": {
               "generic_tweet" : {
