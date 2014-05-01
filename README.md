@@ -10,9 +10,9 @@ Mongoengine:
 
     $ sudo apt-get install python-mongoengine
     
-Wyświetlanie tweetów
+###Wyświetlanie tweetów
 
-Potrzebujemy 2 rzeczy:
+#####Potrzebujemy:
 
  - MongoDB 2.4.9 ( jest prawdopodobieństwo, że na innych wersjach nie zadziała)
     http://downloads.mongodb.org/linux/mongodb-linux-x86_64-2.4.9.tgz
@@ -23,25 +23,26 @@ Możemy je odpalać prosto z katalogów, które wypakujemy.
 
 Załóżmy, że chcemy wyświetlać tweety, które znajdują się w bazie lokalnej 'twitter' i kolekcji 'generic_tweet'.
 
-Konfiguracja Mongo:
+#####Konfiguracja Mongo:
 
-    1. Odpalalamy mongo jako replike
-        $ ./mongod --replSet "rs0"
-    2. Łączymy się z bazą
+1. Odpalalamy mongo jako replikę.
+        $ sudo ./mongod --replSet "rs0"
+2. Łączymy się z bazą
         $ ./mongo
-    3. Potem w terminalu 
+3. Potem w terminalu 
         $ use twitter
         $ rs.initiate()
         
-Konfiguracja Elasticsearch:
 
-    1. Bedąc w głównym katalogu pobieramy potrzebne wtyczki:
+#####Konfiguracja Elasticsearch:
+
+1. Bedąc w głównym katalogu pobieramy potrzebne wtyczki:
         $ ./bin/plugin -install elasticsearch/elasticsearch-mapper-attachments/1.9.0
         $ ./bin/plugin --install com.github.richardwilly98.elasticsearch/elasticsearch-river-mongodb/2.0.0
         $ ./bin/plugin --url https://github.com/triforkams/geohash-facet/releases/download/geohash-facet-0.0.14/geohash-facet-0.0.14.jar --install geohash-facet
-    2. Uruchamiamy Elasticsearch
+2. Uruchamiamy Elasticsearch
         $ ./bin/elasticsearch
-    3. Teraz konfiguracja: 
+3. Teraz konfiguracja: 
         $ curl -XPUT 'localhost:9200/twitter' -d '{
             "mappings": {
               "generic_tweet" : {
@@ -88,10 +89,10 @@ Konfiguracja Elasticsearch:
                 "type": "generic_tweet" 
             }
         }'
-    4. Po wykonaniu powyższych komend utworzyliśmy indeks o nazwie 'twitter' z elementami o typie 'generic_tweet', które pobieramy z lokalnej bazy 'twitter' i kolekcji 'generic_tweet'.
-    5. Restatrujemy Elasticrearch. Aby sprawdzić czy wszystko działa wpisujemy w przegladarke:
+4. Po wykonaniu powyższych komend utworzyliśmy indeks o nazwie 'twitter' z elementami o typie 'generic_tweet', które pobieramy z lokalnej bazy 'twitter' i kolekcji 'generic_tweet'.
+5. Restatrujemy Elasticrearch. Aby sprawdzić czy wszystko działa wpisujemy w przegladarke:
         $ http://localhost:9200/twitter/_search?search_type=count&pretty=1
-    6. Jeśli otrzymaliśmy JSONa z odpowiedzią, gdzie klucz "total" jest rózny od zera to prawdopodobnie wszystko  jest ok.
+6. Jeśli otrzymaliśmy JSONa z odpowiedzią, gdzie klucz "total" jest rózny od zera to prawdopodobnie wszystko jest ok.
     
 
     
