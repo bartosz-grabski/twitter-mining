@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+from __future__ import print_function
 from threading import Thread
 from json_socket import JSONSocket, NoMessageAvailable, ConnectionLost
 from data_model import AbstractTweet, GenericTweet, dbConnect, genericSize
@@ -10,6 +11,26 @@ import operator
 import sys
 import signal
 import errno
+
+WHOLE_WORLD_COORDS = [ -180.0, -90.0, 180.0, 90.0 ]
+
+def verbosePrint(*args, **kwargs):
+    global VERBOSE
+    if VERBOSE:
+        print(*args, **kwargs)
+
+def split_coordinates(coordinates):
+    longitudeDelta = coordinates[2] - coordinates[0]
+    latitudeDelta = coordinates[3] - coordinates[1]
+
+    if longitudeDelta >= latitudeDelta:
+        mid = coordinates[0] + longitudeDelta / 2.0
+        return (coordinates[0:2] + [ mid, coordinates[3] ],
+                [ mid ] + coordinates[1:])
+    else:
+        mid = coordinates[1] + latitudeDelta / 2.0
+        return (coordinates[0:3] + [ mid ],
+                [ coordinates[0], mid ] + coordinates[2:])
 
 class Puppet(object):
     def __init__(self, socket, remoteAddress, coordinates):
@@ -29,18 +50,110 @@ class Puppet(object):
         return time.time() - self.timeLastSeen > TIMEOUT_S
 
 class Master(Thread):
-    def __init__ (self, server, puppets):
+    def __init__ (self, server):
         Thread.__init__(self)
-        self.puppets = puppets
+        self.newConnections = []
+        self.puppets = []
+        self.disconnectedPuppets = []
         self.overflow = False
         self.running = True
         self.server = server
+
+    def assignRegionTo(self, region, puppet):
+        try:
+            puppet.socket.send({
+                'type': 'areaDefinition',
+                'area': region
+            })
+            puppet.coordinates = region
+
+            if puppet not in self.puppets:
+                self.puppets.append(puppet)
+        except ConnectionLost as e:
+            self.markPuppetAsDisconnected(puppet)
+            raise e
+
+    def splitRegionEvenly(self, region, puppets):
+        if len(puppets) == 1:
+            self.assignRegionTo(region, puppets[0])
+        elif len(puppets) > 1:
+            subregions = split_coordinates(region)
+            half = len(puppets) / 2
+            self.splitRegionEvenly(subregions[0], puppets[:half])
+            self.splitRegionEvenly(subregions[1], puppets[half:])
+
+    def markPuppetAsDisconnected(self, puppet):
+        print('connection lost with %s:%d' % puppet.remoteAddress)
+        self.disconnectedPuppets.append(puppet)
+
+    def handleDisconnectedPuppets(self):
+        if not self.disconnectedPuppets:
+            return
+
+        puppetsCopy = []
+        done = False
+        while not done:
+            for puppet in self.disconnectedPuppets:
+                if puppet in self.puppets:
+                    self.puppets.remove(puppet)
+                if puppet in puppetsCopy:
+                    puppetsCopy.remove(puppet)
+
+            self.disconnectedPuppets = []
+
+            try:
+                puppetsCopy += self.puppets
+                self.puppets = []
+                self.splitRegionEvenly(WHOLE_WORLD_COORDS, puppetsCopy)
+                done = True
+
+                verbosePrint('regions reassigned:')
+                for puppet in self.puppets:
+                    verbosePrint('%s:%d: %s' % (puppet.remoteAddress +
+                                                (puppet.coordinates,)))
+            except ConnectionLost:
+                pass
+
+    def get_busiest_puppet(self):
+        return sorted(self.puppets, key = operator.attrgetter('downloadSpeed'))[-1]
+
+    # TODO: handle disconnected puppets here
+    def assignNewPuppets(self):
+        for clientSocket, clientAddr in self.newConnections:
+            if not self.puppets:
+                coords = WHOLE_WORLD_COORDS
+            else:
+                busiest = self.get_busiest_puppet()
+                busiest.coordinates, coords = split_coordinates(busiest.coordinates)
+
+                try:
+                    self.assignRegionTo(busiest.coordinates, busiest)
+                except ConnectionLost:
+                    self.markPuppetAsDisconnected(busiest)
+
+            puppet = Puppet(socket = clientSocket,
+                            remoteAddress = clientAddr,
+                            coordinates = coords)
+
+            try:
+                puppet.socket.send({
+                    'type': 'databaseAddress',
+                    'address': self.server.dbAddress
+                })
+
+                self.assignRegionTo(coords, puppet)
+            except ConnectionLost:
+                pass
+
+        self.newConnections = []
 
     def run(self):
         prevTweetsSize = genericSize()
         prevTime = time.time()
         while self.running:
-            disconnected = []
+            self.handleDisconnectedPuppets()
+            self.assignNewPuppets()
+
             for puppet in self.puppets:
                 try:
                     try:
@@ -51,90 +164,25 @@ class Master(Thread):
                         if puppet.isConnectionTimedOut():
                             raise ConnectionLost('timeout')
                 except ConnectionLost:
-                    print('connection lost with %s:%d' % puppet.remoteAddress)
-                    disconnected.append(puppet)
+                    self.markPuppetAsDisconnected(puppet)
 
-            for puppet in disconnected:
-                self.puppets.remove(puppet)
-            if disconnected:
-                copy = self.puppets[:]
-                self.puppets[:] = []
-                for puppet in copy:
-                    if not self.puppets:
-                        coords = [-180.0, -90.0, 180.0, 90.0]
-                    else:
-                        busiest = self.server.get_busiest_puppet()
-                        busiest.coordinates, coords = self.server.split_coordinates(busiest.coordinates)
-                        busiest.socket.send({
-                            'type': 'areaDefinition',
-                            'area': busiest.coordinates
-                        })
-                    puppet.socket.send({
-                            'type': 'areaDefinition',
-                            'area': coords
-                        })
-                    puppet.coordinates = coords
-                    self.puppets.append(puppet)
             self.downloadSpeed = (genericSize() - prevTweetsSize) / (time.time()-prevTime)
 
-            global VERBOSE
-            if VERBOSE:
-                print('master of %d puppets: %d tweets in database, total download speed = %.3f/s'
-                      % (len(self.puppets), genericSize(), self.downloadSpeed))
+            verbosePrint('master of %d puppets: %d tweets in database, total download speed = %.3f/s'
+                         % (len(self.puppets), genericSize(), self.downloadSpeed))
             prevTweetsSize = genericSize()
             prevTime = time.time()
             time.sleep(max(1-(time.time() - prevTime),1))
+
     def shutdown(self):
         print('master thread shutting down')
         self.running = False
 
+        for client in self.puppets:
+            client.shutdown()
+
+
 class Server(object):
-    def __init__(self, puppets):
-        self.puppets = puppets
-
-    def split_coordinates(self, coordinates):
-        longitudeDelta = coordinates[2] - coordinates[0]
-        latitudeDelta = coordinates[3] - coordinates[1]
-
-        if longitudeDelta >= latitudeDelta:
-            mid = coordinates[0] + longitudeDelta / 2.0
-            return (coordinates[0:2] + [ mid, coordinates[3] ],
-                    [ mid ] + coordinates[1:])
-        else:
-            mid = coordinates[1] + latitudeDelta / 2.0
-            return (coordinates[0:3] + [ mid ],
-                    [ coordinates[0], mid ] + coordinates[2:])
-
-    def get_busiest_puppet(self):
-        return sorted(self.puppets, key = operator.attrgetter('downloadSpeed'))[-1]
-
-    def init_puppet(self, clientSocket, clientAddr):
-        if not self.puppets:
-            coords = [-180.0, -90.0, 180.0, 90.0]
-        else:
-            busiest = self.get_busiest_puppet()
-            busiest.coordinates, coords = self.split_coordinates(busiest.coordinates)
-            busiest.socket.send({
-                'type': 'areaDefinition',
-                'area': busiest.coordinates
-            })
-
-        self.puppets.append(
-            Puppet(socket = clientSocket,
-                   remoteAddress = clientAddr,
-                   coordinates = coords)
-        )
-
-        print('connection from %s:%d' % clientAddr)
-        clientSocket.send({
-            'type': 'databaseAddress',
-            'address': self.dbAddress
-        })
-        clientSocket.send({
-            'type': 'areaDefinition',
-            'area': coords
-        })
-
     def start(self, dbAddress, serverHost, serverPort):
         print('server listening on: %s:%d' % (serverHost, serverPort))
         print('database address: %s' % dbAddress)
@@ -146,7 +194,7 @@ class Server(object):
             print('fatal error: cannot connect to database')
             sys.exit(1)
 
-        self.masterThread = Master(self, self.puppets)
+        self.masterThread = Master(self)
         self.masterThread.start()
 
         try:
@@ -160,7 +208,9 @@ class Server(object):
         try:
             while True:
                 try:
-                    self.init_puppet(*self.serverSocket.accept())
+                    clientSocket, clientAddr = self.serverSocket.accept()
+                    self.masterThread.newConnections.append((clientSocket, clientAddr))
+                    print('connection from %s:%d' % clientAddr)
                 except SocketError as e:
                     if e[0] != errno.EINTR: # interrupted system call - e.g. signal
                         raise
@@ -172,9 +222,6 @@ class Server(object):
 
         self.serverSocket.shutdown()
         self.serverSocket.close()
-
-        for client in self.puppets:
-            client.shutdown()
 
 def shutdownSignalHandler(sigNum, stackFrame):
     global server
@@ -194,7 +241,7 @@ signal.signal(signal.SIGTERM, shutdownSignalHandler)
 signal.signal(signal.SIGUSR1, sigusr1Handler)
 
 SERVER_HOST = '0.0.0.0'
-SERVER_PORT = 12346
+SERVER_PORT = 12345
 
 DB_HOST = '127.0.0.1'
 DB_PORT = 27017
@@ -219,7 +266,6 @@ if len(sys.argv) == 5:
     DB_NAME = sys.argv[4]
 
 dbAddress = 'mongodb://%s:%d/%s' % (DB_HOST, DB_PORT, DB_NAME)
-puppets  = []
-server = Server(puppets)
+server = Server()
 server.start(dbAddress, SERVER_HOST, SERVER_PORT)
 

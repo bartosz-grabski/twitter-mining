@@ -83,7 +83,7 @@ class Streamer(TwythonStreamer):
             in_reply_to_id=data['in_reply_to_status_id'],
             username=data['user']['name'],
             screen_name=data['user']['screen_name'],
-            description=data['user']['description'], 
+            description=data['user']['description'],
             geo=data['geo']['coordinates']
         )
 
@@ -127,6 +127,27 @@ class StreamerSubprocess(object):
         #TODO: graceful exit?
 
 class Client(object):
+    def handlePendingMessages(self):
+        messages = {}
+        while True:
+            try:
+                msg = self.socket.recv()
+                msgType = msg['type']
+                if msgType not in messages:
+                    messages[msgType] = [ msg ]
+                else:
+                    messages[msgType].append(msg)
+            except NoMessageAvailable:
+                break
+
+        # databaseAddress must be handled before areaDefinition
+        for key in [ 'databaseAddress', 'areaDefinition' ]:
+            if key in messages:
+                msgs = messages[key]
+                if len(msgs) > 1:
+                    print('skipping %d old "%s" messages' % (len(msgs) - 1, key))
+                self.handleMessage(msgs[-1])
+
     def handleMessage(self, msg):
         if msg['type'] == 'databaseAddress':
             self.setDatabase(msg['address'])
@@ -141,7 +162,7 @@ class Client(object):
             dbConnect(dbAddress)
             self.databaseAddress = dbAddress
         else:
-            print('db address not changed (%s)' % self.dbAddress)
+            print('db address not changed (%s)' % self.databaseAddress)
 
     def initialized(self):
         return self.databaseAddress and self.coordinates
@@ -149,10 +170,7 @@ class Client(object):
     def initialize(self):
         self.coordinates = None
         while not self.initialized():
-            try:
-                self.handleMessage(self.socket.recv())
-            except NoMessageAvailable:
-                pass
+            self.handlePendingMessages()
 
     def __init__(self, hostname, port):
         self.overflow = False;
@@ -194,11 +212,7 @@ class Client(object):
 
                 # TODO: jakis komunikat o osiagnieciu limitu, jesli twitter wysle takie info
 
-                try:
-                    self.handleMessage(self.socket.recv())
-                except NoMessageAvailable:
-                    pass
-
+                self.handlePendingMessages()
                 time.sleep(1.0)
         finally:
             print('cleaning up subprocesses...')

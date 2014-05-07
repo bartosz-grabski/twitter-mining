@@ -42,7 +42,16 @@ class JSONSocket(socket.socket):
         if not isinstance(obj, dict):
             raise AssertionError('only dictionaries allowed for now')
 
-        self.socket.send(json.dumps(obj))
+        try:
+            self.socket.send(json.dumps(obj))
+        except IOError as e:
+            err = e.args[0]
+            # EAGAIN doesn't really belong here, but if the TCP buffer is full,
+            # it means something really bad happened
+            if err in [ errno.EPIPE, errno.ECONNRESET, errno.EAGAIN ]:
+                raise ConnectionLost()
+            else:
+                raise e
 
     def recv(self):
         try:
@@ -52,6 +61,8 @@ class JSONSocket(socket.socket):
             if err in [ errno.EAGAIN, errno.EWOULDBLOCK ]:
                 if not self.bufferedData:
                     raise NoMessageAvailable()
+            elif err in [ errno.EPIPE, errno.ECONNRESET ]:
+                raise ConnectionLost()
             else:
                 raise e
 
