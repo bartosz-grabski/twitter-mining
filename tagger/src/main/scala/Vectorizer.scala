@@ -6,7 +6,7 @@ class Vectorizer {
 	//(tag,classification)
 	
 	def createVectorForContent(content : Array[String], label : Int) = {
-		val vector = new Array[Int](content.length + 1)
+		val vector = new Array[Int](words.size + 1)
 		content.foreach { t =>
 			if (words.contains(t)) {
 				vector(words(t)) = 1	
