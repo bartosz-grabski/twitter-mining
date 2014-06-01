@@ -5,12 +5,11 @@ import org.apache.spark.SparkConf
 import JSON._
 import org.apache.spark.mllib.regression.LinearRegressionWithSGD
 import org.apache.spark.mllib.regression.LabeledPoint
-import org.apache.spark.mllib.linalg.Vectors
 
 object Tagger extends App {
 
-	val conf = new SparkConf().setAppName("Simple Application").setMaster("local")
-    val sc = new SparkContext(conf)
+	//val conf = new SparkConf().setAppName("Simple Application").setMaster("local")
+    //val sc = new SparkContext(conf)
     val dbName = "twitter"
     val collectionName = "tweets"
     val testCollectionLabeled = "test_tweets_labeled"
@@ -42,9 +41,22 @@ object Tagger extends App {
 
 	}
 
+	// should do it for unlabeled test data (label == 0)
 
 	println("[SUCCESS] created vectors for tweets")
-	//tweets.foreach {
-	//	println _
-	//}
+	
+
+	val trainingData = tweets.map { t => 
+		var content = parseJSON(t("content").toString).map(_.toString).toArray
+		content.foreach {
+			println _
+		}
+		LabeledPoint(content.last.toDouble,content.slice(0,content.length-1).map(_.toDouble))
+	}
+
+
+
+	//should do it for unlabeled to trainingData += ...
+
+
 }
