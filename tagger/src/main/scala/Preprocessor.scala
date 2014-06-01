@@ -9,7 +9,7 @@ object Preprocessor extends App {
 	
 	//config
 	val stopwordsFile = "stopwords.csv"
-	val tweetsFile = "tweets/twitter.english_tweet.template.json"
+	val tweetsFile = "tweets/twitter.english_tweet.json"
 	
 	//to prevent java.nio.charset.UnmappableCharacterException
 	implicit val codec = Codec("UTF-8")
