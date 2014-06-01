@@ -1,6 +1,23 @@
+import com.mongodb.casbah.Imports._
+import collection.mutable.HashMap
+
 class Vectorizer {
+
+	private var words = new HashMap[String, Int]()
 	
-	private var words = Map("asd" -> 2,"bsd" -> 1,"csd" -> 0)
+	def initAllWordsMap(mongoConn: MongoConnection, dbName: String, collectionName: String){
+		val collectionTweets = mongoConn(dbName)(collectionName)
+		
+		collectionTweets.find().foreach{
+			t => t.as[MongoDBList]("content").toList.foreach{
+				case r: String =>
+					if(!words.contains(r)){
+						words += r -> words.size
+					}
+			}
+		}
+		println("[SUCCESS] Words amount: " + words.size)
+	}
 
 	//Creates vector. Last element of created vector is the label value
 	//(tag,classification)
