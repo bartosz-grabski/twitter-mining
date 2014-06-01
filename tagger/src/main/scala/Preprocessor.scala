@@ -37,7 +37,7 @@ object Preprocessor extends App {
 	for(line <- lines){
 		val result =parseJSON(line)
 		println("\t+ " + result.tweetid.toString.toLong)
-		val newTweet = MongoDBObject(("tweet_id",result.tweetid.toString.toLong), ("content",stripper.strip(result.text.toString, stopwordsFile)))
+		val newTweet = MongoDBObject(("tweet_id",result.tweetid.toString.toLong), ("content",stripper.strip(result.text.toString.toLowerCase(), stopwordsFile)))
 		collectionTweets += newTweet
 	}
 	
