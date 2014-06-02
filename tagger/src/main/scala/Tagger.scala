@@ -49,11 +49,6 @@ object Tagger extends App {
 		t("content") = vector
 		tweets.save(t)
 	}
-
-	tweets.foreach { t =>
-
-	}
-
 	// should do it for unlabeled test data (label == 0)
 
 	println("[SUCCESS] created vectors for tweets")
@@ -61,19 +56,19 @@ object Tagger extends App {
 
 	val mongoRDD = sc.newAPIHadoopRDD(mongoHadoopConfig,classOf[MongoInputFormat],classOf[Object],classOf[BSONObject])
 
-	mongoRDD.foreach { (bson) =>
-		println(bson.toString)
+	val trainingData = mongoRDD.map { bson =>
+		val vector = bson._2.get("content").asInstanceOf[BasicDBList].toArray
+		LabeledPoint(vector(vector.length-1).asInstanceOf[Int].toDouble,vector.slice(0,vector.length-1).map(_.asInstanceOf[Int].toDouble))
 	}
 
-	//should do it for unlabeled to trainingData += ...
+	val numIterations = 40
+	val model = SVMWithSGD.train(trainingData, numIterations)
+
+
 
 	val numIterations = 40
-	//val model = SVMWithSGD.train(trainingData, numIterations)
-
-	// to insert tweets collection here
-
-
-
+	val model = SVMWithSGD.train(trainingData, numIterations)
 	
+		// TODO, model evaluation against real data
 
 }
