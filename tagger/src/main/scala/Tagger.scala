@@ -6,10 +6,12 @@ import JSON._
 import org.apache.spark.mllib.regression.LinearRegressionWithSGD
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.classification.SVMWithSGD
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.hadoop.conf.Configuration
 import org.bson.BSONObject
 import org.bson.BasicBSONObject
 import com.mongodb.hadoop.MongoInputFormat
+
 
 object Tagger extends App {
 
@@ -58,17 +60,14 @@ object Tagger extends App {
 
 	val trainingData = mongoRDD.map { bson =>
 		val vector = bson._2.get("content").asInstanceOf[BasicDBList].toArray
-		LabeledPoint(vector(vector.length-1).asInstanceOf[Int].toDouble,vector.slice(0,vector.length-1).map(_.asInstanceOf[Int].toDouble))
+		LabeledPoint(vector(vector.length-1).asInstanceOf[Int].toDouble,Vectors.dense(vector.slice(0,vector.length-1).map(_.asInstanceOf[Int].toDouble)))
+	}
+
+	trainingData.foreach { t=>
+		println(t.toString)
 	}
 
 	val numIterations = 40
 	val model = SVMWithSGD.train(trainingData, numIterations)
-
-
-
-	val numIterations = 40
-	val model = SVMWithSGD.train(trainingData, numIterations)
-	
-		// TODO, model evaluation against real data
 
 }
