@@ -5,11 +5,24 @@ import org.apache.spark.SparkConf
 import JSON._
 import org.apache.spark.mllib.regression.LinearRegressionWithSGD
 import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.mllib.classification.SVMWithSGD
+import org.apache.hadoop.conf.Configuration
+import org.bson.BSONObject
+import org.bson.BasicBSONObject
+import com.mongodb.hadoop.MongoInputFormat
 
 object Tagger extends App {
 
-	//val conf = new SparkConf().setAppName("Simple Application").setMaster("local")
-    //val sc = new SparkContext(conf)
+    val sc = new SparkContext("local","Twitter tagger")
+    
+    // Spark Mongo/Hadoop config
+
+    val mongoHadoopConfig = new Configuration()
+    mongoHadoopConfig.set("mongo.input.uri", "mongodb://127.0.0.1:27017/twitter.tweets")
+    mongoHadoopConfig.set("mongo.output.uri", "mongodb://127.0.0.1:27017/twitter.tweets_output")
+
+
+
     val dbName = "twitter"
     val collectionName = "tweets"
     val testCollectionLabeled = "test_tweets_labeled"
@@ -46,17 +59,21 @@ object Tagger extends App {
 	println("[SUCCESS] created vectors for tweets")
 	
 
-	val trainingData = tweets.map { t => 
-		var content = parseJSON(t("content").toString).map(_.toString).toArray
-		content.foreach {
-			println _
-		}
-		LabeledPoint(content.last.toDouble,content.slice(0,content.length-1).map(_.toDouble))
+	val mongoRDD = sc.newAPIHadoopRDD(mongoHadoopConfig,classOf[MongoInputFormat],classOf[Object],classOf[BSONObject])
+
+	mongoRDD.foreach { (bson) =>
+		println(bson.toString)
 	}
-
-
 
 	//should do it for unlabeled to trainingData += ...
 
+	val numIterations = 40
+	//val model = SVMWithSGD.train(trainingData, numIterations)
+
+	// to insert tweets collection here
+
+
+
+	
 
 }
