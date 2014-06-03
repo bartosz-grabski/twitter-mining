@@ -5,8 +5,8 @@ class AbstractTweet(mongo.Document):
     tweetid = mongo.fields.IntField(required=True)
     userid = mongo.fields.IntField(required=True)
     text = mongo.fields.StringField(required=True, max_length=200)
-    location = mongo.fields.BaseField(required=True)
-    geohash = mongo.fields.StringField(required=True, max_length=32)
+    location = mongo.fields.BaseField(required=False)
+    geohash = mongo.fields.StringField(required=False, max_length=32)
     in_reply_to_id = mongo.fields.IntField(required=False),
     username = mongo.fields.StringField(required=True, max_length=32),
     screen_name = mongo.fields.StringField(required=True, max_length=32),
