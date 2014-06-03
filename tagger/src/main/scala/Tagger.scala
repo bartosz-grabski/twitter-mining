@@ -18,7 +18,7 @@ object Tagger extends App {
 	// config properties
 	val dbName = "twitter"
     val collectionName = "tweets"
-    val vectorCollectionName = "tweets_vectors"
+    val vectorCollection = "tweets_vectors"
     val outputCollection = "tweets_labeled"
     val labeledTrainingFile = "tweets/training/labeled.json"
     val unlabeledTrainingFile = "tweets/training/unlabeled.json"
@@ -29,9 +29,14 @@ object Tagger extends App {
     
     // Spark Mongo/Hadoop config
 
-    val mongoHadoopConfig = new Configuration()
-    mongoHadoopConfig.set("mongo.input.uri", "mongodb://127.0.0.1:27017/twitter."+trainingCollection)
-    mongoHadoopConfig.set("mongo.output.uri", "mongodb://127.0.0.1:27017/twitter."+outputCollection)
+    val mongoTrainingConfig = new Configuration()
+    mongoTrainingConfig.set("mongo.input.uri", "mongodb://127.0.0.1:27017/twitter."+trainingCollection)
+    mongoTrainingConfig.set("mongo.output.uri", "mongodb://127.0.0.1:27017/twitter."+outputCollection) //output is bogus ?
+
+    val mongoTweetsConfig = new Configuration()
+    mongoTweetsConfig.set("mongo.input.uri", "mongodb://127.0.0.1:27017/twitter."+vectorCollection)
+    mongoTweetsConfig.set("mongo.output.uri", "mongodb://127.0.0.1:27017/twitter."+outputCollection) //output is bogus ?
+
 
 	// get DB server connection
 	val mongoConn = MongoConnection("localhost", 27017)
@@ -62,7 +67,7 @@ object Tagger extends App {
 	println("[INFO] creating vectors from tweets ")
 
 	val tweets = mongoConn(dbName)(collectionName)
-	val tweetsVectors = mongoConn(dbName)(vectorCollectionName)
+	val tweetsVectors = mongoConn(dbName)(vectorCollection)
 
 	tweets.foreach { t =>
 		var content = parseJSON(t("content").toString).map(_.toString).toArray
@@ -76,26 +81,49 @@ object Tagger extends App {
 
 	println("[INFO] Retrieving data as RDD for training and predicting")
 
-	val mongoRDD = sc.newAPIHadoopRDD(mongoHadoopConfig,classOf[MongoInputFormat],classOf[Object],classOf[BSONObject])
+	val trainingRDD = sc.newAPIHadoopRDD(mongoTrainingConfig,classOf[MongoInputFormat],classOf[Object],classOf[BSONObject])
 
-	val trainingData = mongoRDD.map { bson =>
+	val trainingData = trainingRDD.map { bson =>
 		val vector = bson._2.get("content").asInstanceOf[BasicDBList].toArray
 		LabeledPoint(vector(vector.length-1).asInstanceOf[Int].toDouble,Vectors.dense(vector.slice(0,vector.length-1).map(_.asInstanceOf[Int].toDouble)))
 	}
 
+	val numIterations = 40
+
+	println("[INFO] Training model")
+
+	val model = SVMWithSGD.train(trainingData, numIterations)
+
+	println("[SUCCESS] Model successfully trained")
+	println("[INFO] Retrieving tweets as RDD")
+
+	val tweetsRDD = sc.newAPIHadoopRDD(mongoTweetsConfig,classOf[MongoInputFormat],classOf[Object],classOf[BSONObject])
+
+	println("[SUCCESS] Retrieved RDD")
+	println("[INFO] Predicting values")
+
+	val labelsRDD = tweetsRDD.map { bson =>
+		val features = bson._2.get("content").asInstanceOf[BasicDBList].toArray
+		val label = model.predict(Vectors.dense(features.map(_.asInstanceOf[Int].toDouble)))
+		val labeledTweet = new BasicBSONObject()
+		labeledTweet.put("tweetid", bson._2.get("tweetid"))
+		labeledTweet.put("label",label)
+		(null, labeledTweet)
+	}
+
+	println("[SUCCESS] Completed prediction, proceeding to saving")
 
 	//must be in this format
-	val saveRDD = trainingData.map { t =>
+	/*val saveRDD = trainingData.map { t =>
 		val bson = new BasicBSONObject()
 		bson.put("sample","sample_content")
 		(null,bson)
-	}
+	}*/
 
-	val numIterations = 40
-	val model = SVMWithSGD.train(trainingData, numIterations)
 
-	saveRDD.saveAsNewAPIHadoopFile("file:///bogus", classOf[Any], classOf[Any], classOf[MongoOutputFormat[Any, Any]], mongoHadoopConfig);
+	labelsRDD.saveAsNewAPIHadoopFile("file:///bogus", classOf[Any], classOf[Any], classOf[MongoOutputFormat[Any, Any]], mongoTweetsConfig);
 
+	println("[SUCCESS] Finished")
 
 	sc.stop()
 
