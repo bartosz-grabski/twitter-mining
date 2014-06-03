@@ -10,51 +10,71 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.hadoop.conf.Configuration
 import org.bson.BSONObject
 import org.bson.BasicBSONObject
-import com.mongodb.hadoop.MongoInputFormat
+import com.mongodb.hadoop.{MongoInputFormat, MongoOutputFormat}
 
 
 object Tagger extends App {
+
+	// config properties
+	val dbName = "twitter"
+    val collectionName = "tweets"
+    val vectorCollectionName = "tweets_vectors"
+    val outputCollection = "tweets_labeled"
+    val labeledTrainingFile = "tweets/training/labeled.json"
+    val unlabeledTrainingFile = "tweets/training/unlabeled.json"
+    val trainingCollection = "tweets_training"
+    val stopWordsFile = "stopwords.csv"
 
     val sc = new SparkContext("local","Twitter tagger")
     
     // Spark Mongo/Hadoop config
 
     val mongoHadoopConfig = new Configuration()
-    mongoHadoopConfig.set("mongo.input.uri", "mongodb://127.0.0.1:27017/twitter.tweets")
-    mongoHadoopConfig.set("mongo.output.uri", "mongodb://127.0.0.1:27017/twitter.tweets_output")
+    mongoHadoopConfig.set("mongo.input.uri", "mongodb://127.0.0.1:27017/twitter."+trainingCollection)
+    mongoHadoopConfig.set("mongo.output.uri", "mongodb://127.0.0.1:27017/twitter."+outputCollection)
 
-
-
-    val dbName = "twitter"
-    val collectionName = "tweets"
-    val testCollectionLabeled = "test_tweets_labeled"
-    val testCollectionUnlabeled = "test_tweets_unlabeled"
 	// get DB server connection
 	val mongoConn = MongoConnection("localhost", 27017)
-
+	
+	// create vectorizer object
 	val vectorizer = new Vectorizer()
+	val trainingDataPreprocessor = new TrainingDataPreprocessor()
+
+	// processes training data and puts it into one collection, with proper label (0,1)
+	trainingDataPreprocessor.process(labeledTrainingFile,unlabeledTrainingFile, trainingCollection,dbName,stopWordsFile)
 	
 	// init map with all words in collection
-	vectorizer.initAllWordsMap(mongoConn, dbName, collectionName)
+	vectorizer.initAllWordsMap(mongoConn, dbName, trainingCollection)
+
+	val trainingTweets = mongoConn(dbName)(trainingCollection)
 	
-	// create vector
-	vectorizer.createVectorForContent(Array("ronnie","how"),1).foreach {
-		println _
+	println("[INFO] creating vectors from training tweets contents")
+
+	trainingTweets.foreach { t =>
+		var content = parseJSON(t("content").toString).map(_.toString).toArray
+		val vector = vectorizer.createVectorForContent(content,t("label").asInstanceOf[Int])
+		t("content") = vector
+		trainingTweets.save(t)
 	}
 
+	println("[SUCCESS] created vectors for training tweets")
+
+	println("[INFO] creating vectors from tweets ")
+
 	val tweets = mongoConn(dbName)(collectionName)
-	println("[INFO] creating vectors from tweets contents")
+	val tweetsVectors = mongoConn(dbName)(vectorCollectionName)
 
 	tweets.foreach { t =>
 		var content = parseJSON(t("content").toString).map(_.toString).toArray
-		val vector = vectorizer.createVectorForContent(content,1)
-		t("content") = vector
-		tweets.save(t)
+		val vector = vectorizer.createVectorForContent(content,0) //label is bogus
+		t("content") = vector.slice(0,vector.length-1) //no label this time
+		tweetsVectors.save(t)
 	}
-	// should do it for unlabeled test data (label == 0)
 
 	println("[SUCCESS] created vectors for tweets")
-	
+
+
+	println("[INFO] Retrieving data as RDD for training and predicting")
 
 	val mongoRDD = sc.newAPIHadoopRDD(mongoHadoopConfig,classOf[MongoInputFormat],classOf[Object],classOf[BSONObject])
 
@@ -63,11 +83,20 @@ object Tagger extends App {
 		LabeledPoint(vector(vector.length-1).asInstanceOf[Int].toDouble,Vectors.dense(vector.slice(0,vector.length-1).map(_.asInstanceOf[Int].toDouble)))
 	}
 
-	trainingData.foreach { t=>
-		println(t.toString)
+
+	//must be in this format
+	val saveRDD = trainingData.map { t =>
+		val bson = new BasicBSONObject()
+		bson.put("sample","sample_content")
+		(null,bson)
 	}
 
 	val numIterations = 40
 	val model = SVMWithSGD.train(trainingData, numIterations)
+
+	saveRDD.saveAsNewAPIHadoopFile("file:///bogus", classOf[Any], classOf[Any], classOf[MongoOutputFormat[Any, Any]], mongoHadoopConfig);
+
+
+	sc.stop()
 
 }

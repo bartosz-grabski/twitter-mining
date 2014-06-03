@@ -28,7 +28,7 @@ object Preprocessor extends App {
 		println("[INFO] Dropping before insert")
 	}
 	
-	val stripper = new StopWordsStripper()
+	val stripper = new StopWordsStripper(stopwordsFile)
 	
 	//load json file with tweets	
 	val lines = scala.io.Source.fromURL(getClass.getResource(tweetsFile)).getLines()
@@ -37,7 +37,7 @@ object Preprocessor extends App {
 	for(line <- lines){
 		val result =parseJSON(line)
 		println("\t+ " + result.tweetid.toString.toLong)
-		val newTweet = MongoDBObject(("tweet_id",result.tweetid.toString.toLong), ("content",stripper.strip(result.text.toString.toLowerCase(), stopwordsFile)))
+		val newTweet = MongoDBObject(("tweet_id",result.tweetid.toString.toLong), ("content",stripper.strip(result.text.toString.toLowerCase())))
 		collectionTweets += newTweet
 	}
 	

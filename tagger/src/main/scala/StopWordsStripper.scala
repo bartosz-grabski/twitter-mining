@@ -5,25 +5,16 @@
 import com.mongodb.casbah.Imports._
 import scala.io.Source._
 
-class StopWordsStripper {
+class StopWordsStripper(filename:String) {
 
-    /**
-     * Returns content of file
-     * @param filename
-     * @return
-     */
-    private def openFile(filename: String) = {
-        val lines = fromInputStream(getClass.getResourceAsStream(filename)).mkString
-        lines
-    }
+	val stopWordsContent = fromInputStream(getClass.getResourceAsStream(filename)).mkString
 
     private def extractStopWords(content: String) = {
         content.split(",");
     }
 
-    def strip(content: String, stopWordsFile: String) : Array[String] = {
+    def strip(content: String) : Array[String] = {
     	
-    	val stopWordsContent = openFile(stopWordsFile)
     	val stopWords = extractStopWords(stopWordsContent)
 
     	val splitted = content.split("[\\p{Punct}\\s]+");
