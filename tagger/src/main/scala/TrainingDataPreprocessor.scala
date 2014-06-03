@@ -7,12 +7,14 @@ import scala.io.Codec
 
 class TrainingDataPreprocessor() {
 
+	//to prevent java.nio.charset.UnmappableCharacterException
+	implicit val codec = Codec("UTF-8")
+	codec.onMalformedInput(CodingErrorAction.REPLACE)
+	codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
+
 
 	def process(labeledFile:String, unlabeledFile:String, trainingCollectionName:String, dbName:String, stopwordsFile:String) = {
 		
-		implicit val codec = Codec("UTF-8")
-		codec.onMalformedInput(CodingErrorAction.REPLACE)
-		codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
 
 		// get DB server connection
 		val mongoConn = MongoConnection("localhost", 27017)
