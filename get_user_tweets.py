@@ -106,7 +106,8 @@ def _add_geo_if_present(tweet, data):
     """
     if 'geo' not in data or not data["geo"]:
         sys.stderr.write(
-            "Warning! Tweet has no geo: " + tweet.tweetid + " " + tweet.text)
+            "Warning! Tweet has no geo: " + tweet.tweetid + " " + tweet.text
+            + "\n")
         return
     geo = data['geo']
     geo_hash = geohash.encode(geo['coordinates'][0],
@@ -119,9 +120,11 @@ def _add_geo_if_present(tweet, data):
 
 def _add_geo_to_dict_if_present(tweet_dict, data):
     if "geo" not in data or not data["geo"]:
+        text = tweet_dict["text"]
+        text = text if len(text) < 30 else text[:27] + "..."
         sys.stderr.write(
-            "Warning! Tweet has no geo: " + str(tweet_dict["tweetid"]) + " "
-            + tweet_dict["text"])
+            "Warning! Tweet has no geo: (" + str(tweet_dict["tweetid"]) + ") "
+            + text + "\n")
         return
     geo = data["geo"]
     tweet_dict["geo"] = geo["coordinates"]
