@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 from twython import Twython, TwythonError
 
 import random
@@ -13,17 +14,17 @@ DEFAULT_DB_NAME = "twitter"
 
 
 def main():
-    if len(sys.argv) not in [3, 6]:
-        print "usage: ./get_user_tweets.py username number_of_tweets [db_host " \
-              "db_port db_name]"
+    if len(sys.argv) != 3:
+        sys.stderr.write(
+            "usage: ./get_user_tweets.py username number_of_tweets\n")
         sys.exit(1)
     username = sys.argv[1]
     number_of_tweets = sys.argv[2]
-    db_address = _get_db_address(sys.argv)
-    dbConnect(db_address)
     twython = _create_twython()
     timeline = _try_to_download_timeline(twython, username, number_of_tweets)
-    _save_timeline(timeline)
+    narrowed_tweet_dicts = map(_narrow_tweet_dict, timeline)
+    for tweet_dict in narrowed_tweet_dicts:
+        print json.dumps(tweet_dict)
 
 
 def _get_db_address(args):
@@ -48,9 +49,24 @@ def _try_to_download_timeline(twython, username, number_of_tweets):
                                              count=number_of_tweets)
         return timeline
     except TwythonError as e:
-        print "Error when downloading the timeline:"
-        print e
+        sys.stderr.write("Error when downloading the timeline:\n")
+        sys.stderr.write(str(e) + "\n")
         return []
+
+
+def _narrow_tweet_dict(data):
+    tweet_dict = {
+        "tweetid": data['id'],
+        "userid": data['user']['id'],
+        "text": data['text'],
+        "in_reply_to_id": data['in_reply_to_status_id'],
+        "username": data['user']['name'],
+        "screen_name": data['user']['screen_name'],
+        "description": data['user']['description'],
+        "lang": data["lang"]
+    }
+    _add_geo_to_dict_if_present(tweet_dict, data)
+    return tweet_dict
 
 
 def _save_timeline(timeline):
@@ -89,7 +105,8 @@ def _add_geo_if_present(tweet, data):
     :type data: dict
     """
     if 'geo' not in data or not data["geo"]:
-        print "Warning! Tweet has no geo:", tweet.tweetid, tweet.text
+        sys.stderr.write(
+            "Warning! Tweet has no geo: " + tweet.tweetid + " " + tweet.text)
         return
     geo = data['geo']
     geo_hash = geohash.encode(geo['coordinates'][0],
@@ -98,6 +115,16 @@ def _add_geo_if_present(tweet, data):
                 'lon': geo['coordinates'][1]}
     tweet.geohash = geo_hash
     tweet.location = location
+
+
+def _add_geo_to_dict_if_present(tweet_dict, data):
+    if "geo" not in data or not data["geo"]:
+        sys.stderr.write(
+            "Warning! Tweet has no geo: " + str(tweet_dict["tweetid"]) + " "
+            + tweet_dict["text"])
+        return
+    geo = data["geo"]
+    tweet_dict["geo"] = geo["coordinates"]
 
 
 def _save_generic_tweet(data):
