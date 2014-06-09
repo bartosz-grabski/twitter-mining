@@ -49,6 +49,7 @@ class TagParser():
         for line in tweets_file:
             tweet_object=json.loads(line)
             #print tweet_object
+            categories=set()
             for cat in self.__tag_dict.keys():
                 prog_regular=re.compile(cat)
                 #prog_at=re.compile(u"@"+cat)
@@ -69,15 +70,22 @@ class TagParser():
                     hsh=cat+','+','.join([ i.__str__() for i in tweet_object[u'geo']])
                     print_text = tweet_object[u'text']+'\n'+tweet_object[u'description']
                     print hsh
-                    if not (hsh in self.__geo_set):   
-                        self.__geo_set.add(hsh)
-                        output_file.write(hsh+','+','.join(self.__tag_dict[cat])+'\n')
-                        
+                    #if not (hsh in self.__geo_set):   
+                    #self.__geo_set.add(hsh)
+                        #output_file.write(hsh+','+','.join(self.__tag_dict[cat])+'\n')
+                    categories.add(cat)
+                    for c in self.__tag_dict[cat]:
+                        categories.add(c)
+                    
+            if categories:
+                tweet_object[u'tags']=list(categories)
+            output_file.write(json.dumps(tweet_object)+'\n')
+            
                     
 if __name__ == '__main__':
     t=TagParser()
     t.set_tag_filename("./muzycy")
     t.set_input_filename("../twitter.english_tweet.json")
-    t.set_output_filename("./output.csv")
+    t.set_output_filename("./output.json")
     t.read_tags()
     t.process_tags()
