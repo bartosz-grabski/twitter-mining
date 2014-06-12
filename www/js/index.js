@@ -21,13 +21,13 @@ function initMap(divId){
 	google.maps.event.addListener(map, 'zoom_changed', function(){ fetchFacets(); } );
 	google.maps.event.addListenerOnce(map, 'idle', function(){ fetchFacets(); });
 	$("#searchButton").on("click", function() {
-		var query = $("#searchQuery").val();
+
 		fetchFacets(query);
 	});
 }
 
-function fetchFacets(query) {
-
+function fetchFacets() {
+	var query = $("#searchQuery").val();
 	var elasticSearchQuery = prepareElasticSearchQuery(query);
 
 	$.ajax({
@@ -74,7 +74,7 @@ function prepareElasticSearchQuery(query) {
 	var matchQuery;
 	var factor = -0.04*zoom + 1.01;
 
-	if(query !== undefined) {
+	if(query !== "") {
 		matchQuery = {
 			match : {
 				_all : query
@@ -166,9 +166,9 @@ function addGeohashCell(geohashCell) {
 }
 
 function groupIcon(groupSize) {
-    return groupSize > 1?
-        'https://chart.googleapis.com/chart?chst=d_map_spin&chld=1.0|0|FF8429|16|b|' + groupSize:
-        'https://chart.googleapis.com/chart?chst=d_map_spin&chld=0.5|0|FF8429|16|b|';
+    return groupSize > 1 ?
+        'https://chart.googleapis.com/chart?chst=d_map_spin&chld=1.0|0|8DC7AF|16|b|' + groupSize:
+        'https://chart.googleapis.com/chart?chst=d_map_spin&chld=0.5|0|8DC7AF|16|b|';
 }
 
 
