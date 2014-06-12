@@ -40,11 +40,10 @@ function addGeohashCell(geohashCell) {
     }));
 }
 
-function fetchFacets() {
+function fetchFacets(query) {
 
-	var elasticSearchQuery = prepareElasticSearchQuery();
+	var elasticSearchQuery = prepareElasticSearchQuery(query);
 
-    console.log("querying with factor " + factor);
     $.ajax({
 
         url: "http://localhost:9200/twitter/_search?search_type=count",
@@ -147,8 +146,10 @@ function initMap(divId){
     google.maps.event.addListener(map, 'dragend', function(){ fetchFacets(); } );
     google.maps.event.addListener(map, 'zoom_changed', function(){ fetchFacets(); } );
     google.maps.event.addListenerOnce(map, 'idle', function(){ fetchFacets(); });
-
-
+	google.maps.event.addListener(document.getElementById("searchButton"), "click", function() {
+		var query = $("#searchQuery").val();
+		fetchFacets(query);
+	});
 }
 
 $(document).ready(function() {
