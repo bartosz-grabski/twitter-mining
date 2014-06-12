@@ -2,6 +2,10 @@ var map;
 var markers = [];
 var geohashCells = [];
 
+$(document).ready(function() {
+	initMap('map');
+});
+
 function initMap(divId){
 	var mapOptions = {
 		zoom: 3,
@@ -47,7 +51,6 @@ function fetchFacets(query) {
 				var markerText;
 				var totalCount = clusters[i].total;
 				if(totalCount === 1) {
-
 					markerText = "item desc @" + getTweetFromHits(lat, lon, data.hits.hits)._source.text;
 				}else {
 					markerText = "cluster (" + clusters[i].total + ") @" + lat + ", " + lon;
@@ -64,22 +67,12 @@ function fetchFacets(query) {
 		});
 }
 
-function getTweetFromHits(lat, lon, hits) {
-	for(var i = 0; i< hits.length ; i++) {
-		if(hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
-			return hits[i];
-		}
-	}
-
-
-}
-
 function prepareElasticSearchQuery(query) {
 	var ne = map.getBounds().getNorthEast();
 	var sw = map.getBounds().getSouthWest();
 	var zoom = map.getZoom();
 	var matchQuery;
-	var factor = -0.04*zoom + 1.05;
+	var factor = -0.04*zoom + 1.01;
 
 	if(query !== undefined) {
 		matchQuery = {
@@ -126,35 +119,44 @@ function prepareElasticSearchQuery(query) {
 }
 
 function clearMarkers() {
-    while(markers.length){
-        markers.pop().setMap(null);
-    }
-}
-
-function addMarker(lat, lon, title, icon) {
-    markers.push(new google.maps.Marker({
-
-		position: new google.maps.LatLng(lat, lon),
-        map: map,
-        title: title,
-        icon: icon,
-        shadow: null
-    }));
+	while(markers.length){
+		markers.pop().setMap(null);
+	}
 }
 
 function clearGeohashCells() {
-    while(geohashCells.length){
-        geohashCells.pop().setMap(null);
-    }
+	while(geohashCells.length){
+		geohashCells.pop().setMap(null);
+	}
+}
+
+function addMarker(lat, lon, title, icon) {
+	markers.push(new google.maps.Marker({
+
+		position: new google.maps.LatLng(lat, lon),
+		map: map,
+		title: title,
+		icon: icon,
+		shadow: null
+	}));
+}
+
+function getTweetFromHits(lat, lon, hits) {
+	for(var i = 0; i< hits.length ; i++) {
+		if(hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
+			return hits[i];
+		}
+	}
+	return undefined;
 }
 
 function addGeohashCell(geohashCell) {
     geohashCells.push(new google.maps.Rectangle({
 
-		strokeColor: '#FF0000',
+		strokeColor: '#047368',
         strokeOpacity: 0.8,
         strokeWeight: 2,
-        fillColor: '#FF0000',
+        fillColor: '#047368',
         fillOpacity: 0.0,
         map: map,
         bounds: new google.maps.LatLngBounds(
@@ -169,7 +171,5 @@ function groupIcon(groupSize) {
         'https://chart.googleapis.com/chart?chst=d_map_spin&chld=0.5|0|FF8429|16|b|';
 }
 
-$(document).ready(function() {
-    initMap('map');
-});
+
 
