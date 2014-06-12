@@ -28,7 +28,7 @@ function fetchFacets(query) {
 
 	$.ajax({
 
-		url: "http://localhost:9200/twitter/_search?search_type=count",
+		url: "http://localhost:9200/twitter/_search",
 		contentType: "text/json",
 		type: "POST",
 		data: JSON.stringify(elasticSearchQuery),
@@ -44,17 +44,35 @@ function fetchFacets(query) {
 
 			for (var i = 0; i < clusters.length; i++) {
 				console.log(clusters[i]);
+				var lat = clusters[i].center.lat;
+				var lon = clusters[i].center.lon;
+				var markerText;
+				var totalCount = clusters[i].total;
+				if(totalCount === 1) {
+					markerText = "item desc @" + getTweetFromHits(lat, lon, data.hits.hits)._source.text;
+				}else {
+					markerText = "cluster (" + clusters[i].total + ") @" + lat + ", " + lon;
+				}
 				addMarker(
-					clusters[i].center.lat,
-					clusters[i].center.lon,
-					clusters[i].total == 1 ?
-						"item desc @" + clusters[i].center.lat + ", " + clusters[i].center.lon :
-						"cluster (" + clusters[i].total + ") @" + clusters[i].center.lat + ", " + clusters[i].center.lon,
-					groupIcon(clusters[i].total)
+					lat,
+					lon,
+					markerText,
+					groupIcon(totalCount)
+
 				);
 				addGeohashCell(clusters[i].geohash_cell);
 			}
 		});
+}
+
+function getTweetFromHits(lat, lon, hits) {
+	for(var i = 0; i< hits.length ; i++) {
+		if(hits._source.location.lat === lat && hits._source.location.lon === lon) {
+			return hits[i];
+		}
+	}
+
+
 }
 
 function prepareElasticSearchQuery(query) {
