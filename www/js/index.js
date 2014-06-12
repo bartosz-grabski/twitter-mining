@@ -65,8 +65,8 @@ function fetchFacets(query) {
             addMarker(
                     clusters[i].center.lat,
                     clusters[i].center.lon,
-                    clusters[i].total == 1?
-                        "item desc @" + clusters[i].center.lat + ", " + clusters[i].center.lon:
+                    clusters[i].total == 1 ?
+                        "item desc @" + clusters[i].center.lat + ", " + clusters[i].center.lon :
                         "cluster (" + clusters[i].total + ") @" + clusters[i].center.lat + ", " + clusters[i].center.lon,
                     groupIcon(clusters[i].total)
             );
@@ -146,7 +146,7 @@ function initMap(divId){
     google.maps.event.addListener(map, 'dragend', function(){ fetchFacets(); } );
     google.maps.event.addListener(map, 'zoom_changed', function(){ fetchFacets(); } );
     google.maps.event.addListenerOnce(map, 'idle', function(){ fetchFacets(); });
-	google.maps.event.addListener(document.getElementById("searchButton"), "click", function() {
+	$("#searchButton").on("click", function() {
 		var query = $("#searchQuery").val();
 		fetchFacets(query);
 	});

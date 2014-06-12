@@ -14,15 +14,20 @@
         }
 
         #searchBox {
+            z-index: 500;
             position: absolute;
             top: 20px;
-            left: 50px;
+            left: 100px;
             background: rgba(0,0,0,0.3);
+        }
+
+        #searchBox > input {
+            margin-left: 5px;
         }
 
 
     </style>   
-    <link rel="stylesheet" href="//code.jquery.com/ui/1.10.4/themes/smoothness/jquery-ui.css">
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.4/themes/smoothness/jquery-ui.css">
 </head>
 <body>
     <div id="searchBox">
