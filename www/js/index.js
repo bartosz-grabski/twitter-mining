@@ -66,8 +66,10 @@ function fetchFacets(query) {
 }
 
 function getTweetFromHits(lat, lon, hits) {
+    console.log("dupa");
+    console.log(hits);
 	for(var i = 0; i< hits.length ; i++) {
-		if(hits._source.location.lat === lat && hits._source.location.lon === lon) {
+		if(hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
 			return hits[i];
 		}
 	}
