@@ -2,11 +2,11 @@ var map;
 var markers = [];
 var geohashCells = [];
 
-$(document).ready(function() {
+$(document).ready(function () {
 	initMap('map');
 });
 
-function initMap(div){
+function initMap(div) {
 	var mapOptions = {
 		zoom: 3,
 		center: new google.maps.LatLng(50, 0),
@@ -15,16 +15,28 @@ function initMap(div){
 
 	map = new google.maps.Map(document.getElementById(div), mapOptions);
 
-	//does it have sense while resizing?
-	google.maps.event.addDomListener(window, 'resize', function(){ fetchFacets(); } );
-	google.maps.event.addListener(map, 'dragend', function(){ fetchFacets(); } );
-	google.maps.event.addListener(map, 'zoom_changed', function(){ fetchFacets(); } );
-	google.maps.event.addListenerOnce(map, 'idle', function(){ fetchFacets(); });
-	$("#searchButton").on("click", function() {
+	google.maps.event.addDomListener(window, 'resize', function () {
 		fetchFacets();
 	});
-	$("#searchBox").keyup(function(event){
-		if(event.keyCode == 13){
+
+	google.maps.event.addListener(map, 'dragend', function () {
+		fetchFacets();
+	});
+
+	google.maps.event.addListener(map, 'zoom_changed', function () {
+		fetchFacets();
+	});
+
+	google.maps.event.addListenerOnce(map, 'idle', function () {
+		fetchFacets();
+	});
+
+	$("#searchButton").on("click", function () {
+		fetchFacets();
+	});
+
+	$("#searchBox").keyup(function (event) {
+		if (event.keyCode == 13) {
 			fetchFacets();
 		}
 	});
@@ -42,7 +54,7 @@ function fetchFacets() {
 		data: JSON.stringify(elasticSearchQuery),
 		dataType: "json"
 
-	}).done(function(data){
+	}).done(function (data) {
 
 			clearMarkers();
 			clearGeohashCells();
@@ -50,15 +62,18 @@ function fetchFacets() {
 			var clusters = data.facets.places.clusters;
 
 			for (var i = 0; i < clusters.length; i++) {
+
 				var lat = clusters[i].center.lat;
 				var lon = clusters[i].center.lon;
 				var markerText;
 				var totalCount = clusters[i].total;
-				if(totalCount === 1) {
+
+				if (totalCount === 1) {
 					markerText = "item desc @" + getTweetFromHits(lat, lon, data.hits.hits)._source.text;
-				}else {
+				} else {
 					markerText = "cluster (" + clusters[i].total + ") @" + lat + ", " + lon;
 				}
+
 				addMarker(
 					lat,
 					lon,
@@ -72,21 +87,22 @@ function fetchFacets() {
 }
 
 function prepareElasticSearchQuery(query) {
+
 	var ne = map.getBounds().getNorthEast();
 	var sw = map.getBounds().getSouthWest();
 	var zoom = map.getZoom();
 	var matchQuery;
-	var factor = -0.04*zoom + 1.01;
+	var factor = -0.04 * zoom + 1.01;
 
-	if(query !== "") {
+	if (query !== "") {
 		matchQuery = {
-			match : {
-				_all : query
+			match: {
+				_all: query
 			}
 		}
-	}else {
+	} else {
 		matchQuery = {
-			match_all : { }
+			match_all: { }
 		}
 	}
 
@@ -123,13 +139,13 @@ function prepareElasticSearchQuery(query) {
 }
 
 function clearMarkers() {
-	while(markers.length){
+	while (markers.length) {
 		markers.pop().setMap(null);
 	}
 }
 
 function clearGeohashCells() {
-	while(geohashCells.length){
+	while (geohashCells.length) {
 		geohashCells.pop().setMap(null);
 	}
 }
@@ -146,8 +162,8 @@ function addMarker(lat, lon, title, icon) {
 }
 
 function getTweetFromHits(lat, lon, hits) {
-	for(var i = 0; i< hits.length ; i++) {
-		if(hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
+	for (var i = 0; i < hits.length; i++) {
+		if (hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
 			return hits[i];
 		}
 	}
@@ -155,25 +171,23 @@ function getTweetFromHits(lat, lon, hits) {
 }
 
 function addGeohashCell(geohashCell) {
-    geohashCells.push(new google.maps.Rectangle({
+	geohashCells.push(new google.maps.Rectangle({
 
 		strokeColor: '#047368',
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: '#047368',
-        fillOpacity: 0.0,
-        map: map,
-        bounds: new google.maps.LatLngBounds(
-            new google.maps.LatLng(geohashCell.top_left.lat, geohashCell.top_left.lon),
-            new google.maps.LatLng(geohashCell.bottom_right.lat, geohashCell.bottom_right.lon))
-    }));
+		strokeOpacity: 0.8,
+		strokeWeight: 2,
+		fillColor: '#047368',
+		fillOpacity: 0.0,
+		map: map,
+		bounds: new google.maps.LatLngBounds(
+			new google.maps.LatLng(geohashCell.top_left.lat, geohashCell.top_left.lon),
+			new google.maps.LatLng(geohashCell.bottom_right.lat, geohashCell.bottom_right.lon))
+	}));
 }
 
 function groupIcon(groupSize) {
-    return groupSize > 1 ?
-        'https://chart.googleapis.com/chart?chst=d_map_spin&chld=1.0|0|8DC7AF|16|b|' + groupSize:
-        'https://chart.googleapis.com/chart?chst=d_map_spin&chld=0.5|0|8DC7AF|16|b|';
+	if(groupSize > 1) {
+		return	'https://chart.googleapis.com/chart?chst=d_map_spin&chld=1.0|0|8DC7AF|16|b|' + groupSize;
+	}
+	return 'https://chart.googleapis.com/chart?chst=d_map_spin&chld=0.5|0|8DC7AF|16|b|';
 }
-
-
-
