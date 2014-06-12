@@ -28,7 +28,7 @@ function fetchFacets(query) {
 
 	$.ajax({
 
-		url: "http://localhost:9200/twitter/_search",
+		url: "http://localhost:9200/twitter/_search?size=1000000",
 		contentType: "text/json",
 		type: "POST",
 		data: JSON.stringify(elasticSearchQuery),
@@ -40,15 +40,14 @@ function fetchFacets(query) {
 			clearGeohashCells();
 
 			var clusters = data.facets.places.clusters;
-			console.log('received ' + clusters.length + ' clusters');
 
 			for (var i = 0; i < clusters.length; i++) {
-				console.log(clusters[i]);
 				var lat = clusters[i].center.lat;
 				var lon = clusters[i].center.lon;
 				var markerText;
 				var totalCount = clusters[i].total;
 				if(totalCount === 1) {
+
 					markerText = "item desc @" + getTweetFromHits(lat, lon, data.hits.hits)._source.text;
 				}else {
 					markerText = "cluster (" + clusters[i].total + ") @" + lat + ", " + lon;
@@ -66,8 +65,6 @@ function fetchFacets(query) {
 }
 
 function getTweetFromHits(lat, lon, hits) {
-    console.log("dupa");
-    console.log(hits);
 	for(var i = 0; i< hits.length ; i++) {
 		if(hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
 			return hits[i];
