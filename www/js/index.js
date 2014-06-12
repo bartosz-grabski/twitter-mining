@@ -162,7 +162,8 @@ function addMarker(lat, lon, title, icon) {
 }
 
 function getTweetFromHits(lat, lon, hits) {
-	for (var i = 0; i < hits.length; i++) {
+	for (var i = 0, hitsLength = hits.length; i < hitsLength; i++) {
+
 		if (hits[i]._source.location.lat === lat && hits[i]._source.location.lon === lon) {
 			return hits[i];
 		}
@@ -187,6 +188,7 @@ function addGeohashCell(geohashCell) {
 
 function groupIcon(groupSize) {
 	if(groupSize > 1) {
+
 		return	'https://chart.googleapis.com/chart?chst=d_map_spin&chld=1.0|0|8DC7AF|16|b|' + groupSize;
 	}
 	return 'https://chart.googleapis.com/chart?chst=d_map_spin&chld=0.5|0|8DC7AF|16|b|';
