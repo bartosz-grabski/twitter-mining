@@ -6,14 +6,14 @@ $(document).ready(function() {
 	initMap('map');
 });
 
-function initMap(divId){
+function initMap(div){
 	var mapOptions = {
 		zoom: 3,
 		center: new google.maps.LatLng(50, 0),
 		mapTypeId: google.maps.MapTypeId.ROADMAP
 	};
 
-	map = new google.maps.Map(document.getElementById(divId), mapOptions);
+	map = new google.maps.Map(document.getElementById(div), mapOptions);
 
 	//does it have sense while resizing?
 	google.maps.event.addDomListener(window, 'resize', function(){ fetchFacets(); } );
@@ -21,8 +21,12 @@ function initMap(divId){
 	google.maps.event.addListener(map, 'zoom_changed', function(){ fetchFacets(); } );
 	google.maps.event.addListenerOnce(map, 'idle', function(){ fetchFacets(); });
 	$("#searchButton").on("click", function() {
-
-		fetchFacets(query);
+		fetchFacets();
+	});
+	$("#searchBox").keyup(function(event){
+		if(event.keyCode == 13){
+			fetchFacets();
+		}
 	});
 }
 
