@@ -1,0 +1,45 @@
+<html>
+<head>
+    <title>Tweets</title>
+    <style type="text/css">
+        html, body{
+            height:100%;
+            margin:0;
+            padding:0;
+            width:100%;
+        }
+        #map{
+            height:100%;
+            width:100%;
+        }
+
+        #searchBox {
+            z-index: 500;
+            position: absolute;
+            top: 20px;
+            left: 100px;
+            background: rgba(0,0,0,0.3);
+        }
+
+        #searchBox > input {
+            margin-left: 5px;
+        }
+
+
+    </style>   
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.4/themes/smoothness/jquery-ui.css">
+</head>
+<body>
+    <div id="searchBox">
+        <input type="text" style="width: 200px;" id="searchQuery" placeholder="Search query"/>
+        <button id="searchButton">
+            Search for it!
+        </button>
+
+    </div>
+    <div id="map"></div>
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+    <script type="text/javascript" src="js/jquery-1.9.1.js"></script>
+    <script type="text/javascript" src="js/index.js"></script>
+</body>
+</html>
